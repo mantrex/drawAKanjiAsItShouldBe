@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>DAKAISB test</title></head>
+<body>
+  <div id="container-1"></div>
+  <div id="container-2"></div>
+  <script type="module">
+    import { createKanjiAnimation } from '../src/index.js';
+
+    window.runTest = async (svgUrl, containerId) => {
+      const res = await fetch(svgUrl);
+      const svgText = await res.text();
+      const container = document.getElementById(containerId);
+      const anim = createKanjiAnimation(svgText, container, { speed: 50 });
+      return anim;
+    };
+  </script>
+</body>
+</html>

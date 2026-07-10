@@ -1,0 +1,19 @@
+{
+  "colors": [
+    "#f0708a",
+    "#f0a860",
+    "#f0e26a",
+    "#6ee7a8",
+    "#6adfd9",
+    "#7aa6f0",
+    "#a89af0",
+    "#e07af0",
+    "#e0708a",
+    "#a8e070"
+  ],
+  "defaultColor": "#93969f",
+  "speed": 350,
+  "showStrokeNumbers": false,
+  "strokeWidth": 3,
+  "strokeNumberColor": "#f0708a"
+}
