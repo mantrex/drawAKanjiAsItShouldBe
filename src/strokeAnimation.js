@@ -1,17 +1,42 @@
 // strokeAnimation.js
-// Builds one Web Animations API Animation per stroke path, revealing each
-// path sequentially via stroke-dasharray/stroke-dashoffset — the standard,
-// dependency-free "line drawing" SVG animation technique. Each stroke gets
-// its own Animation object so play/pause/cancel naturally stay consistent
-// per-stroke (the browser owns the timeline, not hand-rolled state).
-export function buildStrokeAnimations(strokePathEls, { speed, strokeWidth, pathToColor, defaultColor }) {
+// Builds Web Animations API Animations per stroke path, revealing each path
+// sequentially via stroke-dasharray/stroke-dashoffset — the standard,
+// dependency-free "line drawing" SVG animation technique.
+//
+// Each stroke gets TWO independent Animation objects sharing the same delay
+// and duration: one for strokeDashoffset (ease-in-out, the drawing motion)
+// and one for `stroke` color (always linear, so a percentage-based crossfade
+// is actually linear in time). They're kept separate because WAAPI's
+// per-keyframe easing applies to every property changing at that keyframe —
+// a single Animation can't give strokeDashoffset an ease-in-out curve and
+// `stroke` a linear one over the same segment. Both animations land in the
+// same flat `animations` array; play/pause/cancel don't need to know which
+// is which since they're driven identically.
+//
+// When strokeAnimationColor is set, the stroke draws in strokeAnimationColor
+// and crossfades to its final block color over the last
+// `strokeAnimationColorFade` percent of its own duration (0 = hard switch
+// right at completion, no crossfade). When unset/null, the color animation
+// is skipped entirely and the stroke just sits at its final block color.
+//
+// Stroke-number labels (if enabled) get a companion Animation, on the same
+// delay as their stroke, that flips them from invisible to visible right as
+// the stroke starts drawing — so numbers appear one at a time instead of all
+// at once.
+const NUMBER_REVEAL_FRACTION = 0.15; // fraction of `speed` spent fading the number in
+
+export function buildStrokeAnimations(
+  strokePathEls,
+  { speed, strokeWidth, pathToColor, defaultColor, strokeAnimationColor, strokeAnimationColorFade }
+) {
   const animations = [];
 
   strokePathEls.forEach((path, index) => {
-    const color = pathToColor.get(path) || defaultColor;
+    const finalColor = pathToColor.get(path) || defaultColor;
+    const drawColor = strokeAnimationColor || finalColor;
 
     path.setAttribute("fill", "none");
-    path.setAttribute("stroke", color);
+    path.setAttribute("stroke", drawColor);
     path.setAttribute("stroke-width", String(strokeWidth));
     path.setAttribute("stroke-linecap", "round");
     path.setAttribute("stroke-linejoin", "round");
@@ -21,13 +46,58 @@ export function buildStrokeAnimations(strokePathEls, { speed, strokeWidth, pathT
     path.style.strokeDasharray = String(totalLength);
     path.style.strokeDashoffset = String(totalLength);
 
-    const animation = path.animate(
+    const delay = index * speed;
+
+    const dashAnimation = path.animate(
       [{ strokeDashoffset: totalLength }, { strokeDashoffset: 0 }],
-      {
+      { duration: speed, delay, fill: "forwards", easing: "ease-in-out" }
+    );
+    dashAnimation.pause();
+    animations.push(dashAnimation);
+
+    if (strokeAnimationColor && strokeAnimationColor !== finalColor) {
+      const fadeFraction = Math.min(100, Math.max(0, strokeAnimationColorFade || 0)) / 100;
+      const colorKeyframes =
+        fadeFraction > 0
+          ? [
+              { stroke: drawColor, offset: 0 },
+              { stroke: drawColor, offset: 1 - fadeFraction },
+              { stroke: finalColor, offset: 1 },
+            ]
+          : [
+              { stroke: drawColor, offset: 0 },
+              { stroke: drawColor, offset: 1 },
+              { stroke: finalColor, offset: 1 },
+            ];
+
+      const colorAnimation = path.animate(colorKeyframes, {
         duration: speed,
+        delay,
+        fill: "forwards",
+        easing: "linear",
+      });
+      colorAnimation.pause();
+      animations.push(colorAnimation);
+    }
+  });
+
+  return animations;
+}
+
+export function buildStrokeNumberAnimations(strokeNumberEls, { speed }) {
+  const animations = [];
+
+  strokeNumberEls.forEach((text, index) => {
+    text.style.opacity = "0";
+
+    const revealDuration = speed * NUMBER_REVEAL_FRACTION;
+    const animation = text.animate(
+      [{ opacity: 0 }, { opacity: 1 }],
+      {
+        duration: revealDuration,
         delay: index * speed,
         fill: "forwards",
-        easing: "ease-in-out",
+        easing: "linear",
       }
     );
     animation.pause();
@@ -51,5 +121,12 @@ export function resetAnimations(animations, strokePathEls) {
   strokePathEls.forEach((path) => {
     const totalLength = path.getTotalLength();
     path.style.strokeDashoffset = String(totalLength);
+  });
+}
+
+export function resetNumberAnimations(animations, strokeNumberEls) {
+  animations.forEach((a) => a.cancel());
+  strokeNumberEls.forEach((text) => {
+    text.style.opacity = "0";
   });
 }

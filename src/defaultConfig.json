@@ -15,5 +15,8 @@
   "speed": 350,
   "showStrokeNumbers": false,
   "strokeWidth": 3,
-  "strokeNumberColor": "#f0708a"
+  "strokeNumberColor": "#f0708a",
+  "strokeAnimationColor": null,
+  "strokeAnimationColorFade": 0,
+  "colorCriteria": "MAIN"
 }

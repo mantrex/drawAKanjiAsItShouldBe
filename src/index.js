@@ -4,7 +4,14 @@
 // dependency — plain DOM APIs only, usable from any frontend.
 import { parseKanjiVg, SVG_NS } from "./parseKanjiVg.js";
 import { assignBlockColors } from "./assignBlockColors.js";
-import { buildStrokeAnimations, playAnimations, pauseAnimations, resetAnimations } from "./strokeAnimation.js";
+import {
+  buildStrokeAnimations,
+  buildStrokeNumberAnimations,
+  playAnimations,
+  pauseAnimations,
+  resetAnimations,
+  resetNumberAnimations,
+} from "./strokeAnimation.js";
 import { resolveConfig } from "./config.js";
 
 /**
@@ -19,7 +26,7 @@ export function createKanjiAnimation(svgText, containerEl, overrides = {}) {
   const config = resolveConfig(overrides);
   const { svgEl, rootCharGroupEl, strokePathEls, strokeNumberEls } = parseKanjiVg(svgText);
 
-  const { pathToColor } = assignBlockColors(rootCharGroupEl, config.colors, config.defaultColor);
+  const { pathToColor } = assignBlockColors(rootCharGroupEl, config.colors, config.defaultColor, config.colorCriteria);
 
   if (!config.showStrokeNumbers) {
     strokeNumberEls.forEach((el) => el.remove());
@@ -37,7 +44,13 @@ export function createKanjiAnimation(svgText, containerEl, overrides = {}) {
     strokeWidth: config.strokeWidth,
     pathToColor,
     defaultColor: config.defaultColor,
+    strokeAnimationColor: config.strokeAnimationColor,
+    strokeAnimationColorFade: config.strokeAnimationColorFade,
   });
+
+  const numberAnimations = config.showStrokeNumbers
+    ? buildStrokeNumberAnimations(strokeNumberEls, { speed: config.speed })
+    : [];
 
   let destroyed = false;
 
@@ -46,18 +59,22 @@ export function createKanjiAnimation(svgText, containerEl, overrides = {}) {
     play() {
       if (destroyed) return;
       playAnimations(animations);
+      playAnimations(numberAnimations);
     },
     pause() {
       if (destroyed) return;
       pauseAnimations(animations);
+      pauseAnimations(numberAnimations);
     },
     stop() {
       if (destroyed) return;
       resetAnimations(animations, strokePathEls);
+      resetNumberAnimations(numberAnimations, strokeNumberEls);
     },
     destroy() {
       if (destroyed) return;
       animations.forEach((a) => a.cancel());
+      numberAnimations.forEach((a) => a.cancel());
       containerEl.innerHTML = "";
       destroyed = true;
     },

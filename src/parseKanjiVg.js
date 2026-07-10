@@ -6,10 +6,22 @@
 // as the two outermost levels — every real block lives as a descendant
 // of that second <g>.
 const SVG_NS = "http://www.w3.org/2000/svg";
+const KVG_NS = "http://kanjivg.tagaini.net";
+
+// KanjiVG files declare xmlns:kvg only as a DTD-internal-subset default
+// attribute (<!ATTLIST g xmlns:kvg CDATA #FIXED "...">), never directly on
+// an element. Browser DOMParsers don't expand internal DTD subsets, so the
+// kvg: prefix used throughout the document (kvg:element, kvg:type, ...) is
+// reported as unbound. Stamp the namespace onto <svg> itself before parsing
+// so every descendant inherits a bound prefix, regardless of DTD support.
+function ensureKvgNamespace(svgText) {
+  if (/<svg\b[^>]*\sxmlns:kvg\s*=/.test(svgText)) return svgText;
+  return svgText.replace(/<svg\b/, `<svg xmlns:kvg="${KVG_NS}"`);
+}
 
 export function parseKanjiVg(svgText) {
   const parser = new DOMParser();
-  const doc = parser.parseFromString(svgText, "image/svg+xml");
+  const doc = parser.parseFromString(ensureKvgNamespace(svgText), "image/svg+xml");
 
   const parserError = doc.querySelector("parsererror");
   if (parserError) {

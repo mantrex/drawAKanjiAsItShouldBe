@@ -1,18 +1,112 @@
 <!doctype html>
 <html>
-<head><meta charset="utf-8"><title>DAKAISB test</title></head>
+<head>
+  <meta charset="utf-8">
+  <title>DAKAISB test</title>
+  <style>
+    body { font-family: sans-serif; padding: 1.5rem; background: #1b1c20; color: #eee; }
+    .kanji-box { width: 220px; height: 220px; border: 1px solid #444; background: #fff; margin-bottom: 1rem; }
+    .kanji-box svg { width: 100%; height: 100%; }
+    button, select, input { font-size: 1rem; margin-right: 0.5rem; }
+    .controls { margin-bottom: 1rem; }
+    #log { white-space: pre-wrap; font-family: monospace; color: #f88; }
+  </style>
+</head>
 <body>
-  <div id="container-1"></div>
-  <div id="container-2"></div>
+  <h1>DAKAISB test</h1>
+
+  <div class="controls">
+    <label>Kanji:
+      <select id="kanji-select">
+        <option value="063a2.svg">探 (063a2)</option>
+        <option value="08944.svg">襄 (08944)</option>
+      </select>
+    </label>
+    <label>Speed (ms/stroke):
+      <input id="speed-input" type="number" value="350" min="50" step="50" style="width:5em">
+    </label>
+    <label>Color criteria:
+      <select id="criteria-select">
+        <option value="MAIN">MAIN</option>
+        <option value="SUB1">SUB1</option>
+      </select>
+    </label>
+    <label><input id="numbers-input" type="checkbox"> stroke numbers</label>
+    <label>Number color:
+      <input id="number-color-input" type="text" placeholder="e.g. #f0708a" style="width:8em">
+    </label>
+    <label>Animation color:
+      <input id="anim-color-input" type="text" placeholder="e.g. red (empty = off)" style="width:10em">
+    </label>
+    <label>Fade %:
+      <input id="anim-fade-input" type="number" value="0" min="0" max="100" step="10" style="width:4em">
+    </label>
+  </div>
+
+  <div class="controls">
+    <button id="btn-load">Load</button>
+    <button id="btn-play">Play</button>
+    <button id="btn-pause">Pause</button>
+    <button id="btn-stop">Stop</button>
+  </div>
+
+  <div id="container-1" class="kanji-box"></div>
+  <div id="log"></div>
+
   <script type="module">
     import { createKanjiAnimation } from '../src/index.js';
+
+    const container = document.getElementById('container-1');
+    const logEl = document.getElementById('log');
+    let anim = null;
+
+    function log(msg) {
+      console.error(msg);
+      logEl.textContent += msg + '\n';
+    }
+
+    async function load() {
+      try {
+        const file = document.getElementById('kanji-select').value;
+        const speed = Number(document.getElementById('speed-input').value) || 350;
+        const showStrokeNumbers = document.getElementById('numbers-input').checked;
+        const colorCriteria = document.getElementById('criteria-select').value;
+        const strokeNumberColor = document.getElementById('number-color-input').value || undefined;
+        const strokeAnimationColor = document.getElementById('anim-color-input').value || null;
+        const strokeAnimationColorFade = Number(document.getElementById('anim-fade-input').value) || 0;
+
+        const res = await fetch(file);
+        if (!res.ok) throw new Error(`fetch failed: ${res.status} ${res.statusText} for ${file}`);
+        const svgText = await res.text();
+
+        if (anim) anim.destroy();
+        anim = createKanjiAnimation(svgText, container, {
+          speed,
+          showStrokeNumbers,
+          colorCriteria,
+          strokeNumberColor,
+          strokeAnimationColor,
+          strokeAnimationColorFade,
+        });
+        log(`Loaded ${file} OK`);
+      } catch (err) {
+        log('ERROR: ' + err.message);
+      }
+    }
+
+    document.getElementById('btn-load').addEventListener('click', load);
+    document.getElementById('btn-play').addEventListener('click', () => anim && anim.play());
+    document.getElementById('btn-pause').addEventListener('click', () => anim && anim.pause());
+    document.getElementById('btn-stop').addEventListener('click', () => anim && anim.stop());
+
+    // auto-load first kanji on page open
+    load();
 
     window.runTest = async (svgUrl, containerId) => {
       const res = await fetch(svgUrl);
       const svgText = await res.text();
-      const container = document.getElementById(containerId);
-      const anim = createKanjiAnimation(svgText, container, { speed: 50 });
-      return anim;
+      const c = document.getElementById(containerId);
+      return createKanjiAnimation(svgText, c, { speed: 50 });
     };
   </script>
 </body>
