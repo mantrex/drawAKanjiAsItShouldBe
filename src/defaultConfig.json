@@ -11,12 +11,26 @@
     "#e0708a",
     "#a8e070"
   ],
-  "defaultColor": "#93969f",
   "speed": 350,
   "showStrokeNumbers": false,
   "strokeWidth": 3,
   "strokeNumberColor": "#f0708a",
   "strokeAnimationColor": null,
   "strokeAnimationColorFade": 0,
-  "colorCriteria": "MAIN"
+  "colorCriteria": "MAIN",
+  "size": null,
+  "showGrid": false,
+  "gridColor": "#aaaaaa",
+  "gridStyle": "dashed",
+  "gridWidth": 1,
+  "showModel": false,
+  "modelColor": "#dddddd",
+  "border": false,
+  "borderColor": "#aaaaaa",
+  "borderStyle": "solid",
+  "borderWidth": 1,
+  "borderGridDimension": "pixel",
+  "svgPath": null,
+  "interval": 500,
+  "gap": 0
 }

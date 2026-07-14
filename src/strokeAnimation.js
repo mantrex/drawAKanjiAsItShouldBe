@@ -109,7 +109,26 @@ export function buildStrokeNumberAnimations(strokeNumberEls, { speed }) {
 }
 
 export function playAnimations(animations) {
-  animations.forEach((a) => a.play());
+  animations.forEach((a) => {
+    // WAAPI rewinds an animation back to currentTime 0 when you call
+    // .play() on it while it's sitting at (or past) the end of its active
+    // duration with a positive playbackRate — true whether its playState is
+    // "finished" (never paused) or "paused" (paused after finishing, which
+    // is exactly what pause() does to every animation, including strokes
+    // that already fully drew before the pause). Checking playState alone
+    // doesn't catch the "paused at the end" case, so compare currentTime
+    // against the animation's own end time instead: skip .play() for any
+    // animation that has already reached it, or a completed stroke would
+    // visibly redraw itself from scratch out of sequence on resume.
+    // Floating-point timing means currentTime can land a hair below the
+    // true end (e.g. 1049.9999999998 vs. 1050) even when the animation has
+    // fully played out — an exact >= comparison misses that and lets a
+    // completed stroke's play() call rewind it to 0. A small epsilon
+    // absorbs that imprecision.
+    const endTime = a.effect.getTiming().delay + a.effect.getTiming().duration;
+    if (a.currentTime !== null && a.currentTime >= endTime - 0.5) return;
+    a.play();
+  });
 }
 
 export function pauseAnimations(animations) {
