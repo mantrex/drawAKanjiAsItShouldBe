@@ -127,6 +127,8 @@ This surfaces the radical plus each top-level semantic component instead of just
 
 ## License
 
+Copyright 2026 Alessandro Mantelli
+
 DAKAISB's own code is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.md) — free for noncommercial use (personal, research, education, nonprofits); commercial use requires a separate license (contact in [LICENSE.md](LICENSE.md)).
 
 This is separate from the KanjiVG *data* (the SVG files themselves, e.g. in `assets/kanjivg/` or any KanjiVG repository you point `svgPath`/`createKanjiAnimation` at), which is CC BY-SA 3.0 — see https://kanjivg.tagaini.net/ for attribution requirements when distributing KanjiVG SVG files. DAKAISB's license does not apply to that data, and using DAKAISB does not change KanjiVG's own licensing obligations.
