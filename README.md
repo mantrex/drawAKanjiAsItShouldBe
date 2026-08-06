@@ -22,7 +22,7 @@ const anim = createKanjiAnimation(svgText, containerEl, {
   strokeNumberColor: '#f0708a',
   strokeAnimationColor: null,       // e.g. 'red' — momentary color while a stroke is drawing
   strokeAnimationColorFade: 0,      // 0-100, % of the stroke's own duration spent crossfading to its final color
-  colorCriteria: 'MAIN', // or 'SUB1'
+  colorCriteria: 'MAIN', // or 'SUB1', 'SUB2', 'SUBMAX'
   size: 220,             // px, size of the square the kanji is drawn into. Unset/null = fill containerEl's own CSS size instead
   showGrid: true,        // cross behind the kanji, splitting it into 4 quadrants
   gridColor: '#aaaaaa',
@@ -94,7 +94,7 @@ See `src/defaultConfig.json` for defaults. Every field can be overridden per cal
 | `strokeNumberColor` | Color for stroke-order number labels (only used if `showStrokeNumbers` is true) |
 | `strokeAnimationColor` | If set, the momentary color a stroke is drawn in while animating, before settling to its final block color. `null`/unset means strokes are always their final color, even while drawing |
 | `strokeAnimationColorFade` | `0`–`100`. Percent of each stroke's own duration spent crossfading from `strokeAnimationColor` to its final block color. `0` = hard switch right as the stroke finishes; higher values start the crossfade earlier in that stroke's animation. Ignored if `strokeAnimationColor` is unset |
-| `colorCriteria` | `"MAIN"` (default) or `"SUB1"` — see below |
+| `colorCriteria` | `"MAIN"` (default), `"SUB1"`, `"SUB2"`, or `"SUBMAX"` — see below |
 | `size` | Px size of the square each kanji is rendered into. In `createKanjiAnimation`, `null`/unset (the default) leaves the SVG's own sizing alone, so it just fills whatever space `containerEl`'s own CSS gives it. In `createKanjiAnimationFromText` a concrete size is always needed to lay characters out side by side, so it falls back to `220` if unset — this is the size of *each* kanji's own box, not the whole container |
 | `showGrid` | Whether to draw a cross behind the kanji, splitting its box into 4 quadrants (the traditional 田-style writing guide) |
 | `gridColor` | Color of the grid lines (only used if `showGrid` is true) |
@@ -124,6 +124,33 @@ Every direct `<g>` child of the KanjiVG root character group (`<g id="kvg:Stroke
 Descends the whole tree recursively from the root character group. The first `<g>` found along a branch carrying `kvg:radical` or `kvg:element` is a block — its descendants are not searched further and inherit its color. A `<g>` with neither attribute is a pure structural wrapper (KanjiVG uses these for `kvg:position`/`kvg:phon`-only groupings) and its children are searched instead.
 
 This surfaces the radical plus each top-level semantic component instead of just the two outermost groups. For example, in 探 (`063a2.svg`): `MAIN` yields 2 blocks (扌 and the rest), while `SUB1` yields 3 blocks (扌 radical, 㓁, and 木), because the `kvg:position="right"`/`kvg:phon="㓁+木"` wrapper `<g>`s in between carry neither attribute and are transparently skipped.
+
+### `colorCriteria: "SUB2"`
+
+Like `SUB1`, but allows one extra level of labeled descent past the first labeled `<g>` found along a branch. After that first hit, its descendants are searched (through any purely structural wrappers) for a further `<g>` carrying `kvg:radical`/`kvg:element`. If one or more are found, those become the blocks instead of the first hit; if none are found, the first hit itself is the block (same as `SUB1`).
+
+For example, in 導 (`05c0e.svg`), whose structure is:
+
+```
+導
+├─ 道 (top)         <- SUB1 stops here
+│  ├─ 首
+│  │  └─ 自 → 目
+│  └─ ⻌
+└─ 寸 (radical, bottom)
+```
+
+`SUB1` yields 2 blocks (道, 寸) — it stops at the first hit. `SUB2` yields 3 blocks (首, ⻌, 寸) — one level past 道's first hit, without descending all the way to 自/目. `MAIN` also yields 2 blocks (道, 寸), same as `SUB1` here, since 道 and 寸 are already the two direct `<g>` children of the root.
+
+### `colorCriteria: "SUBMAX"`
+
+The unbounded version of `SUB2`: keeps descending through a labeled `<g>` — at any depth, not just one level — as long as it has further nested `<g>`s carrying `kvg:element`/`kvg:radical`. A branch only stops, and becomes a block, at a labeled `<g>` with no further labeled descendants left (a true semantic leaf).
+
+A labeled `<g>` being descended through this way (rather than stopped at) can have its own direct `<path>` children — strokes belonging to that group itself, before or between its sub-components. Unlike `MAIN`/`SUB1`/`SUB2`, such a run does **not** get a block/color of its own: it merges into a neighboring sub-component's block instead (the nearest one already found earlier in that group's own order if there is one, otherwise the next one found afterward, however deeply nested). Without this, a group's own lead-in strokes would fragment into extra unlabeled micro-blocks alongside its real sub-parts, consuming palette colors for what's usually just one or two strokes.
+
+In 導: `SUBMAX` yields 3 blocks (目, ⻌, 寸) — 首's 3 lead-in strokes merge into 目 (found via 自→目, its own first sub-component), rather than becoming a 4th unlabeled block. In 探: `SUBMAX` yields 4 blocks (扌, 冖, 丿, 木) — identical to `SUB2` here, since 探's nested structure is only one level deeper than `SUB1` at every branch.
+
+`SUBMAX` never swallows further structure by construction (every block it produces is, by definition, a semantic leaf) — it is the deepest decomposition KanjiVG's own tagging supports for a given character. This can mean many small blocks for structurally complex/rare characters; `SUB1`/`SUB2` exist as shallower, more conservative alternatives for exactly that reason.
 
 ## License
 
