@@ -106,6 +106,21 @@ export function buildBorder(svgEl, { color, style = "solid", width = 1, dimensio
 
   applyLineStyle(rect, { color, width, style, dimension, unit });
 
+  // With dimension: "pixel", the rect sits flush on the viewBox boundary
+  // (inset 0 above) and non-scaling-stroke draws its width in screen space —
+  // so half that screen-space width (e.g. 0.5px of a 1px stroke) falls
+  // outside the viewBox and gets clipped by the SVG root's default
+  // overflow:hidden, leaving only a barely-there sliver instead of a full
+  // border. There's no fixed-unit inset that can compensate for this (it
+  // would need the viewBox-units-per-screen-pixel scale factor, which isn't
+  // knowable here when the caller lets the SVG size itself via CSS rather
+  // than passing a fixed `size`) — the actually-correct fix is to stop
+  // clipping at the viewBox edge at all, which is safe: nothing else this
+  // library draws ever extends past the viewBox.
+  if (dimension !== "unit") {
+    svgEl.style.overflow = "visible";
+  }
+
   svgEl.insertBefore(rect, svgEl.firstChild);
 
   return rect;

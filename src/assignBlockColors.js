@@ -213,9 +213,19 @@ function assignBlockColorsSub2(rootCharGroupEl, colors) {
     return el.hasAttribute("kvg:radical") || el.hasAttribute("kvg:element");
   }
 
-  function assignBlock(groupEl) {
+  function assignBlock(groupEl, extraPathEls) {
     const color = nextColor();
     const pathIds = [];
+    // extraPathEls: direct <path> children of a swallowed ancestor that
+    // aren't inside groupEl itself (see assignBlockOneLevelDeeper) — merged
+    // into this block rather than left uncolored. Added first so a leading
+    // run's paths lead the block's own pathIds, same convention as SUBMAX.
+    if (extraPathEls) {
+      for (const path of extraPathEls) {
+        pathToColor.set(path, color);
+        pathIds.push(path.getAttribute("id"));
+      }
+    }
     for (const path of groupEl.querySelectorAll("path")) {
       pathToColor.set(path, color);
       pathIds.push(path.getAttribute("id"));
@@ -233,26 +243,40 @@ function assignBlockColorsSub2(rootCharGroupEl, colors) {
   // transparently through purely structural wrappers (same rule used to
   // find the first hit in the first place). Does not recurse past that
   // level — a labeled descendant's own labeled descendants are left alone.
-  function findNextLabeled(el, out) {
+  // Also collects any direct <path> children encountered along the way
+  // (of `groupEl` itself or of a purely structural wrapper between it and a
+  // found <g>) — these belong to no single sub-component, so they're
+  // returned separately to be merged into whichever block gets assigned
+  // first, rather than silently left uncolored.
+  function findNextLabeled(el, out, strayPaths) {
     for (const child of el.children) {
-      if (child.tagName.toLowerCase() !== "g") continue;
-      if (isBlockGroup(child)) {
-        out.push(child);
-      } else {
-        findNextLabeled(child, out);
+      const tag = child.tagName.toLowerCase();
+      if (tag === "g") {
+        if (isBlockGroup(child)) {
+          out.push(child);
+        } else {
+          findNextLabeled(child, out, strayPaths);
+        }
+      } else if (tag === "path") {
+        strayPaths.push(child);
       }
     }
   }
 
   function assignBlockOneLevelDeeper(firstHitEl) {
     const nextLevel = [];
-    findNextLabeled(firstHitEl, nextLevel);
+    const strayPaths = [];
+    findNextLabeled(firstHitEl, nextLevel, strayPaths);
     if (nextLevel.length === 0) {
       assignBlock(firstHitEl);
     } else {
-      for (const groupEl of nextLevel) {
-        assignBlock(groupEl);
-      }
+      nextLevel.forEach((groupEl, i) => {
+        // Stray paths (firstHitEl's own direct strokes, found before/between
+        // its labeled sub-components) all merge into the FIRST sub-block —
+        // there's no way to tell, structurally, which specific sub-component
+        // they precede/belong to, so they consistently join the earliest one.
+        assignBlock(groupEl, i === 0 ? strayPaths : null);
+      });
     }
   }
 
