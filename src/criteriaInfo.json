@@ -1,0 +1,53 @@
+{
+  "MAIN": {
+    "summary": "Every direct <g> child of the root character group is one block. The shallowest, cheapest criterion — good for simple characters or a quick overview.",
+    "details": {
+      "depth": "direct children of the root only",
+      "dataSource": "KanjiVG kvg:element/kvg:radical tagging",
+      "requiresExternalData": false,
+      "fallback": null,
+      "academic": "Pedagogically the weakest of the five: it groups by the accident of how KanjiVG happened to nest a character's outermost <g> elements, not by any semantic or etymological boundary. Corpus-wide (11,456 KanjiVG files), 55.58% of MAIN's own blocks still contain further nameable sub-structure it never surfaces — the worst under-decomposition rate of any of the five criteria, including SUB1. Best suited to characters with no internal composition at all (e.g. 一/十/木), or as a cheap fallback rather than a teaching tool in its own right."
+    }
+  },
+  "SUB1": {
+    "summary": "Descends each branch to the first labeled <g> (kvg:element or kvg:radical present) and stops there, skipping transparent structural wrapper groups along the way. Surfaces the radical plus each top-level semantic component.",
+    "details": {
+      "depth": "first labeled group per branch",
+      "dataSource": "KanjiVG kvg:element/kvg:radical tagging",
+      "requiresExternalData": false,
+      "fallback": null,
+      "academic": "Closer to a traditional radical-plus-remainder split, but still under-decomposes often: 51.63% of SUB1's blocks (12,743 of 24,679 corpus-wide) contain further nested named structure that SUB1 never exposes because it stops at the first labeled group on a branch — e.g. for 導 (michibiku, 'to guide'), SUB1 stops at 道, hiding the 首/自/目/⻌ structure beneath it and yielding only 2 blocks (道, 寸) where a finer reading distinguishes at least 3–4 meaningful parts. Note KanjiVG's own kvg:radical flag is NOT the classical 214 Kangxi bushu system — it is KanjiVG's own tagging convention, only sometimes aligned with traditional radical boundaries (this alignment has not been formally verified against the canonical Kangxi radical list as part of this project)."
+    }
+  },
+  "SUB2": {
+    "summary": "Like SUB1, but allows one extra level of labeled descent past the first hit on each branch, surfacing one layer of finer detail without going all the way to maximal depth.",
+    "details": {
+      "depth": "first labeled group per branch, plus one further level where available",
+      "dataSource": "KanjiVG kvg:element/kvg:radical tagging",
+      "requiresExternalData": false,
+      "fallback": null,
+      "academic": "An empirically-motivated compromise, not a rule derived from any named pedagogical theory. Cuts the corpus-wide under-decomposition ('swallowing') rate roughly in half versus SUB1 — from 51.63% to 20.26% — and for 76.55% of the corpus a single extra level already reaches the same depth as the fully unbounded SUBMAX criterion. Its main advantage over SUBMAX is legibility on complex/rare characters: SUBMAX's unbounded descent can fragment such characters into runs of near-identical single-stroke labels that read as KanjiVG's own stroke-bookkeeping rather than teaching-relevant parts, a degeneration SUB2's fixed one-level cap structurally avoids by never descending far enough to reach it."
+    }
+  },
+  "SUBMAX": {
+    "summary": "Descends as deep as possible along every branch, stopping only at a true semantic leaf (a labeled group with no further labeled descendants). Surfaces every named sub-component KanjiVG's own tree encodes, at the cost of many small blocks for structurally complex characters.",
+    "details": {
+      "depth": "unbounded — every semantic leaf in the tree",
+      "dataSource": "KanjiVG kvg:element/kvg:radical tagging",
+      "requiresExternalData": false,
+      "fallback": null,
+      "academic": "The ceiling of what KanjiVG's own tagging can express: by construction, 0% of SUBMAX's blocks contain further nested named structure (verified corpus-wide, not merely typical). This ceiling is real, not absolute, in two documented ways. First, KanjiVG's tagging is not internally consistent: the same named component is sometimes decomposed further in one character and not in another with no marker distinguishing the two (e.g. 至 is split into 厶+土 in 41 of its 63 corpus occurrences but left as one unit, 土 only, in the other 20, including in 屋 specifically) — 16.07% of all distinct component names in the corpus show this inconsistency, so SUBMAX's depth on any single character is a lower bound on what KanjiVG's data could in principle support, not a fixed property of the character itself. Second, at the highest end of structural complexity (about 2% of the corpus, concentrated in rare/complex characters such as 囓), unbounded descent degenerates into runs of repeated single-stroke labels that reflect stroke-count bookkeeping rather than a teaching-relevant unit — a case where 'more decomposed' stops being 'more useful.' No claim is made here about which stopping depth is pedagogically correct for a given teaching context; SUBMAX only guarantees maximal exposure of what KanjiVG itself encodes."
+    }
+  },
+  "KRAD": {
+    "summary": "Uses KRADFILE, an independent EDRDG-maintained kanji-component dataset, to decide which named sub-components are teaching-relevant for a given kanji, instead of relying on how deep KanjiVG's own tagging happens to go. Falls back to SUBMAX for a kanji not covered by the bundled mapping.",
+    "details": {
+      "depth": "determined by an external component list per kanji, not by KanjiVG tagging depth",
+      "dataSource": "KRADFILE (EDRDG) mapped onto KanjiVG kvg:element/kvg:original, bundled as src/kradData.json",
+      "requiresExternalData": true,
+      "fallback": "SUBMAX (used automatically for a kanji with no usable KRAD mapping)",
+      "attribution": "KRADFILE component data is Copyright 2001/2007 Michael Raine, James Breen and the Electronic Dictionary Research & Development Group (EDRDG), licensed under CC BY-SA 4.0 (https://www.edrdg.org/edrdg/licence.html). See https://www.edrdg.org/wiki/index.php/KANJIDIC_Project.",
+      "academic": "KRADFILE's component vocabulary is deliberately more granular than the 214 classical Kangxi radicals — it is a corpus of empirically-identified visual/graphic units, not a lexicographic radical assignment, and should not be presented to learners as equivalent to traditional bushu classification. Cross-validated against KanjiVG (25,452 kanji-component pairs, 6,238 kanji): 80.0% of everything KRADFILE names has an identifiable counterpart in that kanji's own KanjiVG tree (62.3% by exact match, 1.6% via KanjiVG's own declared tagging variants, 16.0% by algorithmic/AI-assisted disambiguation against cross-character statistical patterns, reviewable in the project's docsNoGit/ research notes). Of the remaining 20%: 19.7 points are components KanjiVG's tagging of that specific file simply never names at any depth (the same tagging-inconsistency phenomenon noted under SUBMAX, now confirmed against a second, independently-compiled source rather than only observed within KanjiVG itself) — this is the case that produces this criterion's SUBMAX fallback for the affected kanji. A further narrow 0.3% affects characters concentrated in complex traditional (kyūjitai) forms (e.g. characters in the 齒/齊/我/喜/雚 families), where KanjiVG's own stroke-level representation of the character is structurally incompatible with a classical-radical reading rather than merely less detailed — these are excluded from the mapping outright rather than forced into a misleading match. Two statistically strong but ultimately spurious candidate matches (co-occurrence within a shared phonetic-family cluster, not genuine shape correspondence) were identified and deliberately rejected during construction of the bundled mapping; this is disclosed as a caution against treating high cross-character correlation alone as sufficient evidence of a real component match."
+    }
+  }
+}

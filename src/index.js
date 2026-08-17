@@ -15,6 +15,7 @@ import {
 import { resolveConfig } from "./config.js";
 import { buildGrid, buildBorder } from "./grid.js";
 import { buildModel } from "./model.js";
+import criteriaInfo from "./criteriaInfo.json" with { type: "json" };
 
 /**
  * Renders an animated, per-block-colored kanji into `containerEl` from a raw
@@ -272,6 +273,37 @@ export async function createKanjiAnimationFromText(text, containerEl, overrides 
       destroyed = true;
     },
   };
+}
+
+/**
+ * Returns plain-English information about a `colorCriteria` mode, sourced
+ * from criteriaInfo.json (kept as data, not inline strings, specifically so
+ * it can be edited without touching code). By default returns just the
+ * criterion's name and a one-paragraph summary; pass `details: true` for
+ * structured metadata (data source, whether it needs the bundled KRAD
+ * mapping, its fallback behavior, license attribution where relevant, and
+ * an `academic` field aimed at educators/researchers evaluating the
+ * criterion for teaching use — corpus-wide statistics, known limitations,
+ * and how it relates to traditional radical systems, sourced from this
+ * project's own corpus analysis rather than general claims).
+ *
+ * @param {object} [options]
+ * @param {string} [options.criteria] - one of "MAIN"/"SUB1"/"SUB2"/"SUBMAX"/"KRAD" (default "MAIN")
+ * @param {boolean} [options.details] - include the extra structured metadata block (default false)
+ * @returns {{ criteria: string, summary: string, details?: object }}
+ */
+export function kanjiAnimationInfo({ criteria = "MAIN", details = false } = {}) {
+  const info = criteriaInfo[criteria];
+  if (!info) {
+    throw new Error(
+      `dakaisb: unknown colorCriteria "${criteria}" — expected one of: ${Object.keys(criteriaInfo).join(", ")}`
+    );
+  }
+  const result = { criteria, summary: info.summary };
+  if (details) {
+    result.details = info.details;
+  }
+  return result;
 }
 
 export { SVG_NS };

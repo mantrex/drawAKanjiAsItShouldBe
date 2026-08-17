@@ -22,7 +22,7 @@ const anim = createKanjiAnimation(svgText, containerEl, {
   strokeNumberColor: '#f0708a',
   strokeAnimationColor: null,       // e.g. 'red' — momentary color while a stroke is drawing
   strokeAnimationColorFade: 0,      // 0-100, % of the stroke's own duration spent crossfading to its final color
-  colorCriteria: 'MAIN', // or 'SUB1', 'SUB2', 'SUBMAX'
+  colorCriteria: 'MAIN', // or 'SUB1', 'SUB2', 'SUBMAX', 'KRAD'
   size: 220,             // px, size of the square the kanji is drawn into. Unset/null = fill containerEl's own CSS size instead
   showGrid: true,        // cross behind the kanji, splitting it into 4 quadrants
   gridColor: '#aaaaaa',
@@ -81,6 +81,22 @@ Kanji are animated **one at a time**, not simultaneously: `play()` starts the fi
 
 Both functions are plain DOM/fetch — no framework dependency, so they work the same from Vue, React/Next, Svelte, or anywhere else with a `document`.
 
+### `kanjiAnimationInfo`
+
+Returns plain-English information about a `colorCriteria` mode, useful for building UI (a criteria picker with tooltips, documentation generated at build time, etc.) without hardcoding descriptions that can drift out of sync with the library itself. The text lives in `src/criteriaInfo.json`, not inline in code, so it can be edited independently.
+
+```js
+import { kanjiAnimationInfo } from 'dakaisb'
+
+kanjiAnimationInfo({ criteria: 'KRAD' })
+// => { criteria: 'KRAD', summary: 'Uses KRADFILE, an independent EDRDG-maintained...' }
+
+kanjiAnimationInfo({ criteria: 'KRAD', details: true })
+// => { criteria: 'KRAD', summary: '...', details: { depth, dataSource, requiresExternalData, fallback, attribution } }
+```
+
+`criteria` defaults to `"MAIN"` if omitted. `details: true` adds a structured metadata object (data source, whether the criterion needs the bundled KRAD mapping, its fallback behavior, and license attribution where relevant — populated for `"KRAD"`, `null`/absent for the other four, which need no external data). Throws if `criteria` isn't one of `"MAIN"`/`"SUB1"`/`"SUB2"`/`"SUBMAX"`/`"KRAD"`.
+
 ## Config
 
 See `src/defaultConfig.json` for defaults. Every field can be overridden per call to `createKanjiAnimation` or `createKanjiAnimationFromText`.
@@ -94,7 +110,7 @@ See `src/defaultConfig.json` for defaults. Every field can be overridden per cal
 | `strokeNumberColor` | Color for stroke-order number labels (only used if `showStrokeNumbers` is true) |
 | `strokeAnimationColor` | If set, the momentary color a stroke is drawn in while animating, before settling to its final block color. `null`/unset means strokes are always their final color, even while drawing |
 | `strokeAnimationColorFade` | `0`–`100`. Percent of each stroke's own duration spent crossfading from `strokeAnimationColor` to its final block color. `0` = hard switch right as the stroke finishes; higher values start the crossfade earlier in that stroke's animation. Ignored if `strokeAnimationColor` is unset |
-| `colorCriteria` | `"MAIN"` (default), `"SUB1"`, `"SUB2"`, or `"SUBMAX"` — see below |
+| `colorCriteria` | `"MAIN"` (default), `"SUB1"`, `"SUB2"`, `"SUBMAX"`, or `"KRAD"` — see below |
 | `size` | Px size of the square each kanji is rendered into. In `createKanjiAnimation`, `null`/unset (the default) leaves the SVG's own sizing alone, so it just fills whatever space `containerEl`'s own CSS gives it. In `createKanjiAnimationFromText` a concrete size is always needed to lay characters out side by side, so it falls back to `220` if unset — this is the size of *each* kanji's own box, not the whole container |
 | `showGrid` | Whether to draw a cross behind the kanji, splitting its box into 4 quadrants (the traditional 田-style writing guide) |
 | `gridColor` | Color of the grid lines (only used if `showGrid` is true) |
@@ -152,6 +168,18 @@ In 導: `SUBMAX` yields 3 blocks (目, ⻌, 寸) — 首's 3 lead-in strokes mer
 
 `SUBMAX` never swallows further structure by construction (every block it produces is, by definition, a semantic leaf) — it is the deepest decomposition KanjiVG's own tagging supports for a given character. This can mean many small blocks for structurally complex/rare characters; `SUB1`/`SUB2` exist as shallower, more conservative alternatives for exactly that reason.
 
+### `colorCriteria: "KRAD"`
+
+Unlike `MAIN`/`SUB1`/`SUB2`/`SUBMAX` — all of which derive their blocks purely from how deep KanjiVG's own `kvg:element`/`kvg:radical` tagging happens to go for a given character — `KRAD` uses **KRADFILE**, an independent kanji-component dataset maintained by the [Electronic Dictionary Research and Development Group (EDRDG)](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project), as an external source of which sub-components are teaching-relevant for each kanji. KRADFILE is a flat (non-hierarchical) per-kanji component list, built independently of KanjiVG with a deliberately finer-grained component vocabulary than the 214 classical Kangxi radicals.
+
+For a kanji covered by DAKAISB's bundled KRADFILE-to-KanjiVG mapping (`src/kradData.json`), every labeled `<g>` whose `kvg:element` (or `kvg:original`) is in that kanji's KRAD component set becomes its own block — using only that group's own direct `<path>` children, so a target nested inside another target (e.g. `土` inside `至`, both listed as separate components of 屋) still becomes its own separate block rather than being absorbed into its parent's, matching KRADFILE's flat, non-nesting view of the character. A labeled `<g>` not in the target set is transparent (the walk descends through it looking for a target further down). A kanji not covered by the bundled mapping — or one where the mapping process found no usable correspondence at all — falls back to `SUBMAX` for that character.
+
+In 屋: `KRAD` yields 3 blocks (`尸`, `至`, `土`) — note `至` and `土` are two *separate* blocks here, unlike `SUBMAX` (which would give only 2, since `至` swallows `土` by SUBMAX's own semantic-leaf rule). In 導: `KRAD` yields 4 blocks (`首`, `自`, `辶`, `寸`) — `自` absorbs its nested `目` (not itself a KRAD component of 導), while `辶` is correctly matched even though the actual KanjiVG group is tagged `⻌` (`kvg:original="辶"`).
+
+`src/kradData.json`'s mapping was produced by an automated matching pass (exact `kvg:element`/`kvg:original` matches) followed by AI-assisted judgment for the remainder, informed by cross-kanji statistical co-occurrence and, where needed, direct inspection of KanjiVG source files — see the project's `docsNoGit/` research notes for full methodology. It necessarily inherits both sources' own limits: a small number of complex traditional (kyūjitai) characters have KRADFILE and KanjiVG structures that are fundamentally incompatible rather than just differently named, and are excluded from the mapping for that character rather than forced into a wrong match.
+
+KRADFILE component data is Copyright 2001/2007 Michael Raine, James Breen and the Electronic Dictionary Research & Development Group, licensed under [CC BY-SA 4.0](https://www.edrdg.org/edrdg/licence.html). See the [KANJIDIC Project page](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project) for more. This is separate from DAKAISB's own license below and from KanjiVG's license (see "License" further down) — using `colorCriteria: "KRAD"` means your usage is also subject to KRADFILE's CC BY-SA 4.0 attribution requirement.
+
 ## License
 
 Copyright 2026 Alessandro Mantelli
@@ -159,3 +187,5 @@ Copyright 2026 Alessandro Mantelli
 DAKAISB's own code is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.md) — free for noncommercial use (personal, research, education, nonprofits); commercial use requires a separate license (contact in [LICENSE.md](LICENSE.md)).
 
 This is separate from the KanjiVG *data* (the SVG files themselves, e.g. in `assets/kanjivg/` or any KanjiVG repository you point `svgPath`/`createKanjiAnimation` at), which is CC BY-SA 3.0 — see https://kanjivg.tagaini.net/ for attribution requirements when distributing KanjiVG SVG files. DAKAISB's license does not apply to that data, and using DAKAISB does not change KanjiVG's own licensing obligations.
+
+Likewise, `src/kradData.json` (used only by `colorCriteria: "KRAD"`) is derived from KRADFILE, Copyright 2001/2007 Michael Raine, James Breen and the Electronic Dictionary Research & Development Group (EDRDG), CC BY-SA 4.0 — see https://www.edrdg.org/edrdg/licence.html and https://www.edrdg.org/wiki/index.php/KANJIDIC_Project for attribution requirements. DAKAISB's own license does not apply to this data either, and using `colorCriteria: "KRAD"` does not change KRADFILE's own licensing obligations.
