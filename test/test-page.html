@@ -408,14 +408,47 @@
   <script type="module">
     import { createKanjiAnimation, createKanjiAnimationFromText } from '../src/index.js';
 
+    // CHISE data is never bundled with DAKAISB (GPLv2, see README.md's
+    // colorCriteria: "CHISE_MAIN"/"CHISE_SUBMAX" sections) — this demo only
+    // offers each CHISE option if its own chisedata/*.json file actually
+    // exists on disk (i.e. the user ran the corresponding `npm run
+    // fetch-chise*` pipeline locally). The two variants use DIFFERENT data
+    // files (chise.json vs chise-submax.json, different component
+    // granularities for the same kanji) and are offered independently of
+    // each other — one can be present without the other. If a fetch fails,
+    // that option is simply never added to the select.
+    const chiseDataByCriteria = { CHISE_MAIN: null, CHISE_SUBMAX: null };
+
+    function offerChiseVariant(criteriaValue, jsonPath, label) {
+      fetch(jsonPath)
+        .then((res) => {
+          if (!res.ok) throw new Error('not found');
+          return res.json();
+        })
+        .then((data) => {
+          chiseDataByCriteria[criteriaValue] = data;
+          const opt = document.createElement('option');
+          opt.value = criteriaValue;
+          opt.textContent = label;
+          document.getElementById('criteria-select').appendChild(opt);
+        })
+        .catch(() => {
+          // absent or unreadable — this option stays unavailable in this demo.
+        });
+    }
+    offerChiseVariant('CHISE_MAIN', '../chisedata/chise.json', 'CHISE_MAIN');
+    offerChiseVariant('CHISE_SUBMAX', '../chisedata/chise-submax.json', 'CHISE_SUBMAX');
+
     // Shared config panel — read by both the single-kanji and the
     // multi-kanji-text demo, so toggling e.g. "show grid" once affects both.
     function readSharedConfig() {
       const sizeRaw = document.getElementById('size-input').value;
+      const criteria = document.getElementById('criteria-select').value;
       return {
         speed: Number(document.getElementById('speed-input').value) || 350,
         size: sizeRaw ? Number(sizeRaw) : undefined, // empty = let createKanjiAnimation fall back to its own default sizing
-        colorCriteria: document.getElementById('criteria-select').value,
+        colorCriteria: criteria,
+        chiseData: chiseDataByCriteria[criteria] ?? null,
         showStrokeNumbers: document.getElementById('numbers-input').checked,
         strokeNumberColor: document.getElementById('number-color-input').value || undefined,
         strokeAnimationColor: document.getElementById('anim-color-input').value || null,

@@ -87,7 +87,58 @@ import kradData from "./kradData.json" with { type: "json" };
 //   turned out, per the mapping this data was built from, to have no
 //   KanjiVG counterpart in the general case — falls back to SUBMAX for that
 //   kanji.
-export function assignBlockColors(rootCharGroupEl, colors, colorCriteria = "MAIN") {
+//
+// - "CHISE_MAIN": like KRAD, uses an external kanji-component source instead
+//   of KanjiVG's own tagging depth — here, CHISE (Character Information
+//   Service Environment, chise.org), via its IDS (Ideographic Description
+//   Sequence) data. UNLIKE KRAD, this data is NEVER bundled with DAKAISB:
+//   CHISE/IDS is GPLv2-licensed (via the cjkvi/cjkvi-ids mirror this
+//   project's tools/fetch-chise.mjs downloads from), and DAKAISB's own
+//   PolyForm Noncommercial license can't safely absorb GPLv2 data into the
+//   same distributed package. So there is no chiseData.json import here —
+//   the caller must generate chisedata/chise.json locally (see
+//   README.md's colorCriteria: "CHISE_MAIN" section — run `npm run
+//   fetch-chise`, which chains tools/fetch-chise.mjs,
+//   tools/prepare-chise-phase3.mjs, and tools/build-chise-data.mjs) and
+//   pass the loaded JSON in explicitly as the `chiseData` argument below.
+//   Algorithmically CHISE_MAIN mirrors KRAD's own target-set walk exactly
+//   (same nested-target-is-a-peer-not-a-child rule, same loose-path
+//   bubbling) — only the data source, how it's supplied, and what happens
+//   when it's missing differ. "_MAIN" names this variant's own component
+//   granularity, not KanjiVG's MAIN criterion: it's CHISE stopped at the
+//   first KanjiVG-recognized component per IDS branch (SUB1-style), as
+//   opposed to "CHISE_SUBMAX" below, which expands each branch all the way
+//   to CHISE/IDS's own true leaves regardless of what KanjiVG already
+//   tags at some intermediate depth — see tools/fetch-chise.mjs's own
+//   comments for why CHISE_MAIN stops early (matching KRAD's granularity)
+//   and tools/fetch-chise-submax.mjs for why CHISE_SUBMAX deliberately
+//   does not. UNLIKE KRAD, neither CHISE variant falls back to SUBMAX for
+//   missing coverage — since chiseData is opt-in and easy to simply not
+//   pass, a silent SUBMAX substitution would be too easy to mistake for
+//   genuine CHISE output. Instead, both throw if their data option is not
+//   supplied at all, or if the specific kanji has no entry in it — callers
+//   who want a fallback must catch this and choose one explicitly.
+//
+// - "CHISE_SUBMAX": same data source and licensing/never-bundled situation
+//   as CHISE_MAIN (see above), same runtime walk algorithm, but built from
+//   a deeper, independently-expanded component set: each IDS branch is
+//   followed all the way to CHISE/IDS's own true leaves (self-decomposition
+//   or no further entry), WITHOUT stopping early just because some
+//   intermediate component already happens to be a recognized KanjiVG
+//   kvg:element. This means CHISE_SUBMAX's decomposition depth is decided
+//   entirely by CHISE/IDS as a source in its own right, then matched onto
+//   KanjiVG afterwards purely to find which group to color — never the
+//   other way around (KanjiVG's own tagging depth never gates how far
+//   CHISE_SUBMAX's expansion goes, unlike CHISE_MAIN, unlike SUBMAX, and
+//   unlike the first implementation attempt at CHISE_MAIN itself, which
+//   this project already tried and reverted for being KanjiVG-gated in a
+//   way that turned out to defeat the point of using a second, independent
+//   source at all). Requires its own separately-generated chiseData
+//   (`chisedata/chise-submax.json`, via `npm run fetch-chise-submax` and
+//   the same Phase 3/4 follow-up scripts) — CHISE_MAIN's chiseData is not
+//   interchangeable with it, since the two encode different component
+//   granularities for the same kanji.
+export function assignBlockColors(rootCharGroupEl, colors, colorCriteria = "MAIN", chiseData) {
   if (colorCriteria === "SUB1") {
     return assignBlockColorsSub1(rootCharGroupEl, colors);
   }
@@ -99,6 +150,12 @@ export function assignBlockColors(rootCharGroupEl, colors, colorCriteria = "MAIN
   }
   if (colorCriteria === "KRAD") {
     return assignBlockColorsKrad(rootCharGroupEl, colors);
+  }
+  if (colorCriteria === "CHISE_MAIN") {
+    return assignBlockColorsChiseMain(rootCharGroupEl, colors, chiseData);
+  }
+  if (colorCriteria === "CHISE_SUBMAX") {
+    return assignBlockColorsChiseSubmax(rootCharGroupEl, colors, chiseData);
   }
   return assignBlockColorsMain(rootCharGroupEl, colors);
 }
@@ -671,6 +728,126 @@ function assignBlockColorsKrad(rootCharGroupEl, colors) {
     block.color = colors[i % colors.length];
     for (const p of block.pathEls) pathToColor.set(p, block.color);
     delete block.pathEls; // internal bookkeeping only, not part of the public block shape
+  });
+
+  return { pathToColor, blocks };
+}
+
+function assignBlockColorsChiseMain(rootCharGroupEl, colors, chiseData) {
+  return assignBlockColorsChiseFromTargetSet(rootCharGroupEl, colors, chiseData, "CHISE_MAIN");
+}
+
+function assignBlockColorsChiseSubmax(rootCharGroupEl, colors, chiseData) {
+  return assignBlockColorsChiseFromTargetSet(rootCharGroupEl, colors, chiseData, "CHISE_SUBMAX");
+}
+
+// Shared walk for both CHISE variants — they differ only in which chiseData
+// they're handed (CHISE_MAIN: components stopped at the first
+// KanjiVG-recognized name per IDS branch; CHISE_SUBMAX: components expanded
+// to CHISE/IDS's own true leaves, independent of KanjiVG's tagging depth —
+// see the "CHISE_MAIN"/"CHISE_SUBMAX" comments above assignBlockColors) and
+// in this criterionName used for their error messages.
+function assignBlockColorsChiseFromTargetSet(rootCharGroupEl, colors, chiseData, criterionName) {
+  const rootElement = rootCharGroupEl.getAttribute("kvg:element");
+
+  if (!chiseData) {
+    throw new Error(
+      `dakaisb: colorCriteria "${criterionName}" requires the chiseData option (see README.md's colorCriteria: "${criterionName}" section for how to generate and pass it in) — unlike "KRAD", it never falls back to "SUBMAX" silently, since chiseData is expected to be either fully present or intentionally not used at all.`
+    );
+  }
+  const chiseTargets = rootElement ? chiseData.kanji?.[rootElement] : undefined;
+  if (!chiseTargets || chiseTargets.length === 0) {
+    throw new Error(
+      `dakaisb: colorCriteria "${criterionName}" has no mapping for "${rootElement ?? "(unknown root element)"}" in the supplied chiseData — this kanji is outside its coverage. Catch this and fall back to another colorCriteria (e.g. "SUBMAX") explicitly if you want that behavior; DAKAISB does not do it silently.`
+    );
+  }
+  const targetSet = new Set(chiseTargets);
+
+  const pathToColor = new Map();
+  const blocks = [];
+  let blockIndex = 0;
+
+  function nextColor() {
+    const color = colors[blockIndex % colors.length];
+    blockIndex += 1;
+    return color;
+  }
+
+  function isBlockGroup(el) {
+    return el.hasAttribute("kvg:radical") || el.hasAttribute("kvg:element");
+  }
+
+  // Same variant-aware matching as assignBlockColorsKrad's isTarget — see
+  // its own comment for why both kvg:element and kvg:original are checked.
+  function isTarget(el) {
+    const name = el.getAttribute("kvg:element");
+    const original = el.getAttribute("kvg:original");
+    return Boolean((name && targetSet.has(name)) || (original && targetSet.has(original)));
+  }
+
+  function newBlock(pathEls, element, radical) {
+    const color = nextColor();
+    const pathIds = pathEls.map((p) => p.getAttribute("id"));
+    blocks.push({ index: blocks.length, color, pathIds, pathEls, element, radical });
+    return color;
+  }
+
+  // Identical walk/merge strategy to assignBlockColorsKrad (see its own
+  // extensive comment for the full rationale) — a target nested inside
+  // another target is still its own separate block, loose strokes bubble
+  // up to the nearest enclosing target, everything ends up colored.
+  function walk(el, skipDirectPaths) {
+    let loose = [];
+
+    for (const child of el.children) {
+      const tag = child.tagName.toLowerCase();
+
+      if (tag === "path") {
+        if (!skipDirectPaths) loose.push(child);
+        continue;
+      }
+      if (tag !== "g") continue;
+
+      if (isBlockGroup(child) && isTarget(child)) {
+        const ownPathEls = [...child.children].filter((c) => c.tagName.toLowerCase() === "path");
+        const claimed = [...loose, ...ownPathEls];
+        loose = [];
+        const innerLoose = walk(child, true);
+        const finalPathEls = [...claimed, ...innerLoose];
+        if (finalPathEls.length === 0) continue;
+        const rawName = child.getAttribute("kvg:element");
+        const original = child.getAttribute("kvg:original");
+        const label = rawName && targetSet.has(rawName) ? rawName : original;
+        newBlock(finalPathEls, label || null, child.getAttribute("kvg:radical") || null);
+      } else if (isBlockGroup(child)) {
+        loose.push(...walk(child));
+      } else {
+        loose.push(...walk(child));
+      }
+    }
+
+    return loose;
+  }
+
+  const rootLoose = walk(rootCharGroupEl);
+  if (rootLoose.length) {
+    newBlock(rootLoose, null, null);
+  }
+
+  // Same document-order re-pass as assignBlockColorsKrad — see its comment
+  // for why blocks need re-sorting/re-coloring after resolution order.
+  const documentOrder = new Map();
+  [...rootCharGroupEl.querySelectorAll("path")].forEach((p, i) => documentOrder.set(p.getAttribute("id"), i));
+  for (const block of blocks) {
+    block.pathIds.sort((a, b) => documentOrder.get(a) - documentOrder.get(b));
+  }
+  blocks.sort((a, b) => documentOrder.get(a.pathIds[0]) - documentOrder.get(b.pathIds[0]));
+  pathToColor.clear();
+  blocks.forEach((block, i) => {
+    block.index = i;
+    block.color = colors[i % colors.length];
+    for (const p of block.pathEls) pathToColor.set(p, block.color);
+    delete block.pathEls;
   });
 
   return { pathToColor, blocks };

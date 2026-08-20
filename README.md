@@ -22,7 +22,8 @@ const anim = createKanjiAnimation(svgText, containerEl, {
   strokeNumberColor: '#f0708a',
   strokeAnimationColor: null,       // e.g. 'red' — momentary color while a stroke is drawing
   strokeAnimationColorFade: 0,      // 0-100, % of the stroke's own duration spent crossfading to its final color
-  colorCriteria: 'MAIN', // or 'SUB1', 'SUB2', 'SUBMAX', 'KRAD'
+  colorCriteria: 'MAIN', // or 'SUB1', 'SUB2', 'SUBMAX', 'KRAD', 'CHISE_MAIN', 'CHISE_SUBMAX'
+  chiseData: null,       // only for colorCriteria: 'CHISE_MAIN'/'CHISE_SUBMAX' — see below, never bundled with DAKAISB
   size: 220,             // px, size of the square the kanji is drawn into. Unset/null = fill containerEl's own CSS size instead
   showGrid: true,        // cross behind the kanji, splitting it into 4 quadrants
   gridColor: '#aaaaaa',
@@ -95,7 +96,7 @@ kanjiAnimationInfo({ criteria: 'KRAD', details: true })
 // => { criteria: 'KRAD', summary: '...', details: { depth, dataSource, requiresExternalData, fallback, attribution } }
 ```
 
-`criteria` defaults to `"MAIN"` if omitted. `details: true` adds a structured metadata object (data source, whether the criterion needs the bundled KRAD mapping, its fallback behavior, and license attribution where relevant — populated for `"KRAD"`, `null`/absent for the other four, which need no external data). Throws if `criteria` isn't one of `"MAIN"`/`"SUB1"`/`"SUB2"`/`"SUBMAX"`/`"KRAD"`.
+`criteria` defaults to `"MAIN"` if omitted. `details: true` adds a structured metadata object (data source, whether the criterion needs external data, its fallback behavior, and license attribution where relevant — populated for `"KRAD"`, `"CHISE_MAIN"`, and `"CHISE_SUBMAX"`, `null`/absent for the other four, which need no external data). Throws if `criteria` isn't one of `"MAIN"`/`"SUB1"`/`"SUB2"`/`"SUBMAX"`/`"KRAD"`/`"CHISE_MAIN"`/`"CHISE_SUBMAX"`.
 
 ## Config
 
@@ -110,7 +111,8 @@ See `src/defaultConfig.json` for defaults. Every field can be overridden per cal
 | `strokeNumberColor` | Color for stroke-order number labels (only used if `showStrokeNumbers` is true) |
 | `strokeAnimationColor` | If set, the momentary color a stroke is drawn in while animating, before settling to its final block color. `null`/unset means strokes are always their final color, even while drawing |
 | `strokeAnimationColorFade` | `0`–`100`. Percent of each stroke's own duration spent crossfading from `strokeAnimationColor` to its final block color. `0` = hard switch right as the stroke finishes; higher values start the crossfade earlier in that stroke's animation. Ignored if `strokeAnimationColor` is unset |
-| `colorCriteria` | `"MAIN"` (default), `"SUB1"`, `"SUB2"`, `"SUBMAX"`, or `"KRAD"` — see below |
+| `colorCriteria` | `"MAIN"` (default), `"SUB1"`, `"SUB2"`, `"SUBMAX"`, `"KRAD"`, `"CHISE_MAIN"`, or `"CHISE_SUBMAX"` — see below |
+| `chiseData` | Only used by `colorCriteria: "CHISE_MAIN"`/`"CHISE_SUBMAX"`. The parsed contents of a locally-generated `chisedata/chise.json` (for `"CHISE_MAIN"`) or `chisedata/chise-submax.json` (for `"CHISE_SUBMAX"`) — the two are NOT interchangeable, each criterion needs its own file (see below). DAKAISB never loads either itself, you must import/fetch it yourself and pass it in. `null`/unset (the default), or a kanji not covered by it, makes either criterion **throw** — unlike `"KRAD"`, neither ever falls back to `"SUBMAX"` silently |
 | `size` | Px size of the square each kanji is rendered into. In `createKanjiAnimation`, `null`/unset (the default) leaves the SVG's own sizing alone, so it just fills whatever space `containerEl`'s own CSS gives it. In `createKanjiAnimationFromText` a concrete size is always needed to lay characters out side by side, so it falls back to `220` if unset — this is the size of *each* kanji's own box, not the whole container |
 | `showGrid` | Whether to draw a cross behind the kanji, splitting its box into 4 quadrants (the traditional 田-style writing guide) |
 | `gridColor` | Color of the grid lines (only used if `showGrid` is true) |
@@ -180,6 +182,93 @@ In 屋: `KRAD` yields 3 blocks (`尸`, `至`, `土`) — note `至` and `土` ar
 
 KRADFILE component data is Copyright 2001/2007 Michael Raine, James Breen and the Electronic Dictionary Research & Development Group, licensed under [CC BY-SA 4.0](https://www.edrdg.org/edrdg/licence.html). See the [KANJIDIC Project page](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project) for more. This is separate from DAKAISB's own license below and from KanjiVG's license (see "License" further down) — using `colorCriteria: "KRAD"` means your usage is also subject to KRADFILE's CC BY-SA 4.0 attribution requirement.
 
+### `colorCriteria: "CHISE_MAIN"`
+
+Like `KRAD`, `CHISE_MAIN` uses an external, independently-compiled kanji-component source instead of relying on how deep KanjiVG's own tagging happens to go — but from a different project, with a **critical packaging difference from every other criterion**: its data is **never bundled with the DAKAISB npm package**, and DAKAISB never loads it on its own. You must generate it locally and pass it in yourself as the `chiseData` config option.
+
+**Why CHISE, in addition to KRAD (not instead of it)**: KRADFILE is a flat, empirically-compiled component list; some readers consider it less rigorously documented than [CHISE](https://www.chise.org/) (Character Information Service Environment), which expresses each character's composition as an **IDS** (Ideographic Description Sequence) — e.g. 導 is `⿱道寸` ("道 above 寸"), 探 is `⿰扌罙` ("扌 beside 罙"). CHISE gives an alternative, differently-sourced decomposition for the same purpose, useful for cross-checking or for contexts that specifically call for IDS-based rather than KRADFILE-based grouping. There are two CHISE-based criteria (`CHISE_MAIN` here, `CHISE_SUBMAX` below), differing only in how deep the IDS decomposition is allowed to go — see `CHISE_SUBMAX`'s own section for that distinction. Both stay available side by side with KRAD — none of the three replaces another.
+
+**Why it's never bundled**: the IDS data used here is sourced via the [cjkvi/cjkvi-ids](https://github.com/cjkvi/cjkvi-ids) mirror of the CHISE IDS Database, and is licensed under **GPLv2** — a different license family from DAKAISB itself ([PolyForm Noncommercial](LICENSE.md)), KanjiVG (CC BY-SA 3.0), or KRADFILE (CC BY-SA 4.0). Statically bundling GPLv2 data into a PolyForm Noncommercial npm package risks being read as a "combined work" under the GPL rather than mere aggregation. To avoid that risk entirely, the generated data file is kept physically outside the published package: it lives in a `chisedata/` folder at the project root that is gitignored and never published to npm, produced by scripts in `tools/` that anyone can run locally.
+
+**Algorithmically**, `CHISE_MAIN` mirrors `KRAD`'s walk exactly (same target-set walk: a labeled `<g>` whose `kvg:element`/`kvg:original` is in the kanji's CHISE component set becomes its own block using only its own direct paths, nested targets are peers not parent/child, unclaimed strokes bubble up to the nearest enclosing target). What differs is the source/granularity of the target set — CHISE's IDS decomposition is recursively expanded, but each branch stops at the first KanjiVG-recognized component it reaches (comparable in spirit to `SUB1`'s "first hit and stop" rule), rather than pursuing KRADFILE's own as-given granularity — **and what happens when there's no usable mapping**: unlike `KRAD`, which falls back to `SUBMAX` automatically, `CHISE_MAIN` **throws** if `chiseData` isn't passed at all, or if the specific kanji has no entry in it. This is deliberate: `chiseData` is opt-in and trivially easy to simply forget to pass, so a silent SUBMAX substitution would be too easy to mistake for genuine CHISE_MAIN output. If you want a fallback, catch the error and choose one yourself.
+
+In 屋: `CHISE_MAIN` yields 2 blocks (`尸`, `至`) from the IDS decomposition `⿸尸至` expanded one level (both operands are already recognized KanjiVG elements, so neither branch expands further, even though 至 itself has its own further IDS entry — CHISE_MAIN's KanjiVG-gated stopping rule, below, is exactly why it doesn't follow it). In 導: `CHISE_MAIN` yields 2 blocks (`道`, `寸`) directly from `⿱道寸` (道 is already a recognized KanjiVG element, so that branch doesn't expand further). In 探: `CHISE_MAIN` yields 3 blocks (`扌`, `㓁`, `木`) from `⿰扌罙` recursively expanded, since 罙 itself has no KanjiVG counterpart and further decomposes to 罒/㓁 above 木.
+
+#### Setup
+
+Generating `chisedata/chise.json` is a multi-step pipeline (only the first step is a single command — the rest need either a completed mapping already in hand or a judgment step over a small number of leftover cases):
+
+```bash
+npm run fetch-chise                    # 1. downloads IDS data, matches ~90% of components against KanjiVG deterministically
+npm run fetch-chise:prepare-phase3     # 2. groups the remaining unresolved components for judgment
+#    (judge the resulting chisedata/chise-phase3-components.json entries, saving
+#    resolutions into chisedata/chise-phase3-components-resolved.json — this step
+#    needs case-by-case judgment and isn't a single script)
+npm run fetch-chise:build-mapping      # 3. merges deterministic + judged results
+npm run fetch-chise:build-data         # 4. writes chisedata/chise.json, the file you actually load
+```
+
+Step 1 alone already gets you the ~90% of components KanjiVG matches exactly or via its own declared `kvg:original` variants — sufficient for many kanji on its own. Steps 2–4 close the remaining gap. Each script prints what it did and where it wrote its output; `npm run fetch-chise`'s own log also restates these next steps at the end of its run.
+
+#### Importing it into your own project
+
+DAKAISB itself never reads `chisedata/chise.json` — you import it in **your own project**, the same way you'd import any other local JSON asset, and pass it in explicitly:
+
+```js
+import { createKanjiAnimation } from 'dakaisb'
+import chiseData from '../path/to/DAKAISB/chisedata/chise.json' with { type: 'json' }
+// or, if you'd rather not rely on a JSON import assertion:
+// import { readFileSync } from 'node:fs'
+// const chiseData = JSON.parse(readFileSync('../path/to/DAKAISB/chisedata/chise.json', 'utf8'))
+
+const anim = createKanjiAnimation(svgText, containerEl, {
+  colorCriteria: 'CHISE_MAIN',
+  chiseData, // <- required; "CHISE_MAIN" throws without it
+})
+```
+
+If you don't pass `chiseData` at all, or the specific kanji isn't covered by it, `colorCriteria: "CHISE_MAIN"` **throws an `Error`** — it does not silently fall back to `"SUBMAX"` the way `"KRAD"` does. This is deliberate: `chiseData` is opt-in and easy to simply forget to pass, so a silent substitution would be too easy to mistake for genuine CHISE_MAIN output — if a call to `createKanjiAnimation`/`assignBlockColors` with `colorCriteria: "CHISE_MAIN"` succeeds, its result is guaranteed to be real CHISE_MAIN-derived coloring. If you want a fallback for uncovered kanji, catch the error yourself and retry with another `colorCriteria` (e.g. `"SUBMAX"`). The bundled demo (`test/test-page.html`) sidesteps this by only adding "CHISE_MAIN" to its criteria picker if a local `fetch('../chisedata/chise.json')` succeeds in the first place; if you haven't run the setup steps above, the option simply doesn't appear, so the demo never hits the error path.
+
+If you generate and use `chisedata/chise.json`, you are subject to CHISE/IDS's own GPLv2 licensing terms for your use of that specific data — see License below.
+
+### `colorCriteria: "CHISE_SUBMAX"`
+
+Same CHISE/IDS source, same never-bundled data policy, and the exact same runtime walk algorithm as `CHISE_MAIN` above — but built from a **deeper, independently-expanded component set**. The difference is entirely in how the target-set data is generated, not in how it's used at runtime.
+
+**The distinction, precisely**: `CHISE_MAIN` deliberately lets KanjiVG's own tagging depth gate how far its IDS expansion goes — each branch stops at the first component that's already a recognized KanjiVG element (see its own section above for why: an earlier attempt at unconstrained expansion over-decomposed components like 土, which have their own IDS entry into raw strokes despite being genuine KanjiVG teaching units). `CHISE_SUBMAX` takes the opposite position: **CHISE/IDS is treated as authoritative in its own right**, not a derivative of KanjiVG's tagging — every branch is followed all the way to CHISE/IDS's own true leaves (a self-decomposing/atomic character, or one with no further IDS entry) regardless of what KanjiVG already tags at some intermediate depth. KanjiVG only enters the picture afterward, purely to find which group to color for each resulting leaf — never to decide how far the decomposition itself goes. This mirrors exactly how KRADFILE's already-flat component list is matched against KanjiVG for `KRAD`, rather than CHISE_MAIN's KanjiVG-gated expansion.
+
+Continuing the 屋 example from `CHISE_MAIN` above: 屋's IDS is `⿸尸至`, and while 尸 is already an IDS leaf (self-decomposing), 至 has its own further entry (`⿱𠫔土`, itself expanding further). `CHISE_MAIN` stops at 至 because it's already a recognized KanjiVG element; `CHISE_SUBMAX` keeps going, past 至, all the way down to its own true leaves. Neither result is "more correct" — they answer different questions (see the two criteria's own `academic` notes via `kanjiAnimationInfo({ criteria: 'CHISE_SUBMAX', details: true })` for the full methodological rationale and corpus-wide statistics once generated).
+
+#### Setup
+
+Same shape as `CHISE_MAIN`'s pipeline, entirely separate scripts and output files — `CHISE_SUBMAX`'s data is **not interchangeable** with `CHISE_MAIN`'s:
+
+```bash
+npm run fetch-chise-submax                    # 1. downloads IDS data, expands to true IDS leaves, matches deterministically against KanjiVG
+npm run fetch-chise-submax:prepare-phase3     # 2. groups the remaining unresolved components for judgment
+#    (judge the resulting chisedata/chise-submax-phase3-components.json entries, saving
+#    resolutions into chisedata/chise-submax-phase3-components-resolved.json — this step
+#    needs case-by-case judgment and isn't a single script)
+npm run fetch-chise-submax:build-mapping      # 3. merges deterministic + judged results
+npm run fetch-chise-submax:build-data         # 4. writes chisedata/chise-submax.json, the file you actually load
+```
+
+#### Importing it into your own project
+
+Same pattern as `CHISE_MAIN`, pointing at the other file:
+
+```js
+import { createKanjiAnimation } from 'dakaisb'
+import chiseData from '../path/to/DAKAISB/chisedata/chise-submax.json' with { type: 'json' }
+
+const anim = createKanjiAnimation(svgText, containerEl, {
+  colorCriteria: 'CHISE_SUBMAX',
+  chiseData, // <- required; "CHISE_SUBMAX" throws without it, same policy as CHISE_MAIN
+})
+```
+
+Same throw-not-fallback policy as `CHISE_MAIN`: no silent `"SUBMAX"` substitution if `chiseData` is missing or the kanji isn't covered. If you generate and use `chisedata/chise-submax.json`, you are subject to CHISE/IDS's own GPLv2 licensing terms for your use of that specific data — see License below.
+
 ## License
 
 Copyright 2026 Alessandro Mantelli
@@ -189,3 +278,5 @@ DAKAISB's own code is licensed under the [PolyForm Noncommercial License 1.0.0](
 This is separate from the KanjiVG *data* (the SVG files themselves, e.g. in `assets/kanjivg/` or any KanjiVG repository you point `svgPath`/`createKanjiAnimation` at), which is CC BY-SA 3.0 — see https://kanjivg.tagaini.net/ for attribution requirements when distributing KanjiVG SVG files. DAKAISB's license does not apply to that data, and using DAKAISB does not change KanjiVG's own licensing obligations.
 
 Likewise, `src/kradData.json` (used only by `colorCriteria: "KRAD"`) is derived from KRADFILE, Copyright 2001/2007 Michael Raine, James Breen and the Electronic Dictionary Research & Development Group (EDRDG), CC BY-SA 4.0 — see https://www.edrdg.org/edrdg/licence.html and https://www.edrdg.org/wiki/index.php/KANJIDIC_Project for attribution requirements. DAKAISB's own license does not apply to this data either, and using `colorCriteria: "KRAD"` does not change KRADFILE's own licensing obligations.
+
+`colorCriteria: "CHISE_MAIN"` and `"CHISE_SUBMAX"` are different from every other criterion in one important way: their data is **not distributed with DAKAISB at all**. The IDS data both are derived from comes from the [CHISE project](https://www.chise.org/) via the [cjkvi/cjkvi-ids](https://github.com/cjkvi/cjkvi-ids) mirror, and is licensed under **GPLv2** — incompatible with bundling into a PolyForm Noncommercial-licensed npm package. Because of this, neither `chisedata/chise.json` (`CHISE_MAIN`) nor `chisedata/chise-submax.json` (`CHISE_SUBMAX`) is ever generated as part of installing or building DAKAISB, published to npm, or read by DAKAISB's own code; each exists only if you run its own pipeline (`tools/fetch-chise.mjs` for `CHISE_MAIN`, `tools/fetch-chise-submax.mjs` for `CHISE_SUBMAX`, plus the rest of the corresponding pipeline described above) yourself, and only then do you load and pass it in as the `chiseData` config option. If you do generate and use either file, **you** — not DAKAISB — are responsible for complying with GPLv2 for your own use of that specific data. DAKAISB's own license is unaffected either way, since it never includes or depends on this data.
