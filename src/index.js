@@ -77,12 +77,24 @@ export function createKanjiAnimation(svgText, containerEl, overrides = {}) {
   containerEl.innerHTML = "";
   containerEl.appendChild(svgEl);
 
+  const animations = buildStrokeAnimations(strokePathEls, {
+    speed: config.speed,
+    strokeWidth: config.strokeWidth,
+    pathToColor,
+    defaultColor: config.colors[0],
+    strokeAnimationColor: config.strokeAnimationColor,
+    strokeAnimationColorFade: config.strokeAnimationColorFade,
+  });
+
   // onPartClick wiring: click listeners attach directly to each block's own
   // <path> elements, so they're driven by the same WAAPI-animated <path>s
-  // buildStrokeAnimations below colors/animates — the two mechanisms are
+  // buildStrokeAnimations above colors/animates — the two mechanisms are
   // independent (DOM event listeners vs. Web Animations API) and don't
-  // interfere with each other. `pointer-events: stroke` widens the click
-  // target to the full visible stroke width rather than the hairline default
+  // interfere with each other. Must run AFTER buildStrokeAnimations: that
+  // function does path.removeAttribute("style") to reset each path before
+  // building its animation, which would wipe out pointerEvents/cursor set
+  // here if this ran first. `pointer-events: stroke` widens the click target
+  // to the full visible stroke width rather than the hairline default
   // browsers use for fill="none" paths, without changing anything visual.
   const partClickCleanups = [];
   if (typeof config.onPartClick === "function") {
@@ -110,15 +122,6 @@ export function createKanjiAnimation(svgText, containerEl, overrides = {}) {
       });
     }
   }
-
-  const animations = buildStrokeAnimations(strokePathEls, {
-    speed: config.speed,
-    strokeWidth: config.strokeWidth,
-    pathToColor,
-    defaultColor: config.colors[0],
-    strokeAnimationColor: config.strokeAnimationColor,
-    strokeAnimationColorFade: config.strokeAnimationColorFade,
-  });
 
   const numberAnimations = config.showStrokeNumbers
     ? buildStrokeNumberAnimations(strokeNumberEls, { speed: config.speed })

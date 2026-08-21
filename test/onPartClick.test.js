@@ -81,6 +81,24 @@ test("without onPartClick, no click listeners are attached and rendering is unaf
   });
 });
 
+test("onPartClick's pointer-events/cursor styling survives buildStrokeAnimations", async () => {
+  // Regression test: buildStrokeAnimations does path.removeAttribute("style")
+  // to reset each path before animating it. onPartClick's wiring must run
+  // AFTER that reset, or its pointerEvents/cursor styling gets wiped out
+  // silently (no error — the click listener stays attached, but the widened
+  // hit area and pointer cursor are gone, so real clicks on a thin stroke
+  // can miss it in a real browser even though this DOM-only dispatchEvent
+  // test would still pass).
+  await withDom(({ createKanjiAnimation, document }) => {
+    const container = document.createElement("div");
+    createKanjiAnimation(svgText, container, { onPartClick() {} });
+
+    const firstPath = container.querySelector("path");
+    assert.equal(firstPath.style.pointerEvents, "stroke");
+    assert.equal(firstPath.style.cursor, "pointer");
+  });
+});
+
 test("destroy() removes onPartClick listeners", async () => {
   await withDom(({ createKanjiAnimation, document }) => {
     const container = document.createElement("div");
