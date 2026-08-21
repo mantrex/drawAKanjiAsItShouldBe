@@ -19,6 +19,7 @@
   "strokeAnimationColorFade": 0,
   "colorCriteria": "MAIN",
   "chiseData": null,
+  "onPartClick": null,
   "size": null,
   "showGrid": false,
   "gridColor": "#aaaaaa",

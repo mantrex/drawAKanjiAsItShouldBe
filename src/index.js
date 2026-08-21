@@ -29,7 +29,7 @@ export function createKanjiAnimation(svgText, containerEl, overrides = {}) {
   const config = resolveConfig(overrides);
   const { svgEl, rootCharGroupEl, strokePathEls, strokeNumberEls } = parseKanjiVg(svgText);
 
-  const { pathToColor } = assignBlockColors(rootCharGroupEl, config.colors, config.colorCriteria, config.chiseData);
+  const { pathToColor, blocks } = assignBlockColors(rootCharGroupEl, config.colors, config.colorCriteria, config.chiseData);
 
   if (!config.showStrokeNumbers) {
     strokeNumberEls.forEach((el) => el.remove());
@@ -77,6 +77,40 @@ export function createKanjiAnimation(svgText, containerEl, overrides = {}) {
   containerEl.innerHTML = "";
   containerEl.appendChild(svgEl);
 
+  // onPartClick wiring: click listeners attach directly to each block's own
+  // <path> elements, so they're driven by the same WAAPI-animated <path>s
+  // buildStrokeAnimations below colors/animates — the two mechanisms are
+  // independent (DOM event listeners vs. Web Animations API) and don't
+  // interfere with each other. `pointer-events: stroke` widens the click
+  // target to the full visible stroke width rather than the hairline default
+  // browsers use for fill="none" paths, without changing anything visual.
+  const partClickCleanups = [];
+  if (typeof config.onPartClick === "function") {
+    const pathById = new Map(strokePathEls.map((p) => [p.getAttribute("id"), p]));
+    for (const block of blocks) {
+      const blockPathEls = block.pathIds.map((id) => pathById.get(id)).filter(Boolean);
+      if (blockPathEls.length === 0) continue;
+
+      const detail = {
+        index: block.index,
+        element: block.element,
+        radical: block.radical ?? null,
+        color: block.color,
+        pathIds: block.pathIds,
+      };
+      const handleClick = (event) => config.onPartClick(detail, event);
+
+      blockPathEls.forEach((pathEl) => {
+        pathEl.style.pointerEvents = "stroke";
+        pathEl.style.cursor = "pointer";
+        pathEl.addEventListener("click", handleClick);
+      });
+      partClickCleanups.push(() => {
+        blockPathEls.forEach((pathEl) => pathEl.removeEventListener("click", handleClick));
+      });
+    }
+  }
+
   const animations = buildStrokeAnimations(strokePathEls, {
     speed: config.speed,
     strokeWidth: config.strokeWidth,
@@ -118,6 +152,7 @@ export function createKanjiAnimation(svgText, containerEl, overrides = {}) {
       if (destroyed) return;
       animations.forEach((a) => a.cancel());
       numberAnimations.forEach((a) => a.cancel());
+      partClickCleanups.forEach((cleanup) => cleanup());
       containerEl.innerHTML = "";
       destroyed = true;
     },

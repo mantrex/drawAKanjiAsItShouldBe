@@ -24,6 +24,7 @@ const anim = createKanjiAnimation(svgText, containerEl, {
   strokeAnimationColorFade: 0,      // 0-100, % of the stroke's own duration spent crossfading to its final color
   colorCriteria: 'MAIN', // or 'SUB1', 'SUB2', 'SUBMAX', 'KRAD', 'CHISE_MAIN', 'CHISE_SUBMAX'
   chiseData: null,       // only for colorCriteria: 'CHISE_MAIN'/'CHISE_SUBMAX' — see below, never bundled with DAKAISB
+  onPartClick: null,     // e.g. ({ element, radical, index, pathIds }) => {...} — called when a block is clicked, see below
   size: 220,             // px, size of the square the kanji is drawn into. Unset/null = fill containerEl's own CSS size instead
   showGrid: true,        // cross behind the kanji, splitting it into 4 quadrants
   gridColor: '#aaaaaa',
@@ -82,6 +83,31 @@ Kanji are animated **one at a time**, not simultaneously: `play()` starts the fi
 
 Both functions are plain DOM/fetch — no framework dependency, so they work the same from Vue, React/Next, Svelte, or anywhere else with a `document`.
 
+### `onPartClick`
+
+Called whenever the user clicks any stroke belonging to a block — the same blocks `colorCriteria` groups for coloring, whichever criterion is active. Useful for building an interactive breakdown: click a radical/component, show what it means.
+
+```js
+const anim = createKanjiAnimation(svgText, containerEl, {
+  colorCriteria: 'KRAD',
+  onPartClick(part, event) {
+    console.log(part) // { index: 1, element: '寸', radical: null, color: '#f0a860', pathIds: ['kvg:05f85-s3', ...] }
+  },
+})
+```
+
+The callback receives `(part, event)`:
+- `part.index` — the block's position, in document order (same indexing as its color in `colors`)
+- `part.element` — that block's `kvg:element` value (the component's own character, e.g. `'寸'`), or `null` for an unlabeled run of direct `<path>` children
+- `part.radical` — set only under `colorCriteria: "SUBMAX"`, for blocks KanjiVG itself tags as `kvg:radical`; `null` otherwise
+- `part.color` — the block's assigned color, same value applied to its strokes
+- `part.pathIds` — the KanjiVG `id`s of every `<path>` in this block
+- `event` — the underlying DOM `click` `Event`, for anything not covered above (e.g. `event.clientX/Y` to position a tooltip)
+
+Unset/`null` (the default) attaches no click listeners at all — zero behavior change and zero overhead if you don't use it. Each block's own strokes get `pointer-events: stroke` so the click target follows the visible line rather than the near-invisible hairline hit-area browsers default to on a `fill="none"` path, and `cursor: pointer` while hovering. This is independent of the Web Animations API strokes are animated with, so it works the same whether the kanji is mid-animation, paused, or fully drawn. `destroy()` removes these listeners along with everything else.
+
+`createKanjiAnimationFromText` passes `onPartClick` straight through to every kanji in the sequence — the callback fires the same way per-character, per-block, whichever kanji in the text was clicked.
+
 ### `kanjiAnimationInfo`
 
 Returns plain-English information about a `colorCriteria` mode, useful for building UI (a criteria picker with tooltips, documentation generated at build time, etc.) without hardcoding descriptions that can drift out of sync with the library itself. The text lives in `src/criteriaInfo.json`, not inline in code, so it can be edited independently.
@@ -113,6 +139,7 @@ See `src/defaultConfig.json` for defaults. Every field can be overridden per cal
 | `strokeAnimationColorFade` | `0`–`100`. Percent of each stroke's own duration spent crossfading from `strokeAnimationColor` to its final block color. `0` = hard switch right as the stroke finishes; higher values start the crossfade earlier in that stroke's animation. Ignored if `strokeAnimationColor` is unset |
 | `colorCriteria` | `"MAIN"` (default), `"SUB1"`, `"SUB2"`, `"SUBMAX"`, `"KRAD"`, `"CHISE_MAIN"`, or `"CHISE_SUBMAX"` — see below |
 | `chiseData` | Only used by `colorCriteria: "CHISE_MAIN"`/`"CHISE_SUBMAX"`. The parsed contents of a locally-generated `chisedata/chise.json` (for `"CHISE_MAIN"`) or `chisedata/chise-submax.json` (for `"CHISE_SUBMAX"`) — the two are NOT interchangeable, each criterion needs its own file (see below). DAKAISB never loads either itself, you must import/fetch it yourself and pass it in. `null`/unset (the default), or a kanji not covered by it, makes either criterion **throw** — unlike `"KRAD"`, neither ever falls back to `"SUBMAX"` silently |
+| `onPartClick` | `null`/unset (default), or `(part, event) => {...}`, called when a block's stroke is clicked — see below |
 | `size` | Px size of the square each kanji is rendered into. In `createKanjiAnimation`, `null`/unset (the default) leaves the SVG's own sizing alone, so it just fills whatever space `containerEl`'s own CSS gives it. In `createKanjiAnimationFromText` a concrete size is always needed to lay characters out side by side, so it falls back to `220` if unset — this is the size of *each* kanji's own box, not the whole container |
 | `showGrid` | Whether to draw a cross behind the kanji, splitting its box into 4 quadrants (the traditional 田-style writing guide) |
 | `gridColor` | Color of the grid lines (only used if `showGrid` is true) |

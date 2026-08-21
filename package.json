@@ -1,6 +1,6 @@
 {
   "name": "dakaisb",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Draw A Kanji As It Should Be — dependency-free stroke-order animation for KanjiVG-format SVGs, with per-block coloring.",
   "type": "module",
   "main": "src/index.js",
@@ -20,7 +20,7 @@
   ],
   "license": "SEE LICENSE IN LICENSE.md",
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test",
     "fetch-chise": "node tools/fetch-chise.mjs",
     "fetch-chise:prepare-phase3": "node tools/prepare-chise-phase3.mjs",
     "fetch-chise:build-mapping": "node tools/build-chise-mapping.mjs",
