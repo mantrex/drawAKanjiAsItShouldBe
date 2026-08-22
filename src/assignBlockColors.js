@@ -683,19 +683,21 @@ function assignBlockColorsKrad(rootCharGroupEl, colors) {
         newBlock(finalPathEls, label || null, child.getAttribute("kvg:radical") || null);
       } else if (isBlockGroup(child)) {
         // Labeled but not a target: transparent — descend for nested
-        // targets, but child's OWN direct <path>s (skipDirectPaths=true)
-        // must not enter that recursive call's loose accumulator, or a
-        // target found deeper in the same call wrongly absorbs them via the
-        // `claimed = [...loose, ...ownPathEls]` line above. E.g. 窺's 夫 (not
-        // a KRAD target) directly owns one stroke AND wraps a nested target
-        // 大 (which is one) — that stroke belongs to 夫, not to 大, so a
-        // nested target must only ever claim ITS OWN direct paths and
-        // further-nested targets, never strokes belonging to this
-        // (non-target) wrapper itself. child's own direct paths are instead
-        // collected separately here and appended to `loose` for THIS level
-        // afterwards, same as if child had never been entered.
-        const ownDirectPathEls = [...child.children].filter((c) => c.tagName.toLowerCase() === "path");
-        loose.push(...walk(child, true), ...ownDirectPathEls);
+        // targets. child's own direct <path>s DO enter that recursive
+        // call's loose accumulator (skipDirectPaths left false/undefined),
+        // so a target found while descending through child can claim them —
+        // deliberately, not a bug: KRADFILE frequently has no entry at all
+        // for an intermediate wrapper like 夫 in 規/窺 (only 大 and 見/穴 are
+        // its recorded targets for those kanji), so there is no "correct"
+        // block for child's own stroke to join on its own terms. Attaching
+        // it to the nearest target actually found while descending through
+        // child (its own nested content) reads far more naturally than
+        // bubbling it further up to an unrelated sibling target several
+        // strokes away — confirmed against real kanji (規: keeping 夫's lone
+        // stroke with the nested 大 block, not merged into the unrelated 見
+        // block found next at this level). Anything still unclaimed after
+        // descending bubbles up to THIS level as usual.
+        loose.push(...walk(child));
       } else {
         // Purely structural wrapper: same, transparent.
         loose.push(...walk(child));

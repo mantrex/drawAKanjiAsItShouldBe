@@ -1,11 +1,15 @@
-// Regression test for a KRAD block-assignment bug: when a KRAD target (e.g.
-// 大) is nested inside a KanjiVG group that is itself labeled but NOT a KRAD
-// target (e.g. 夫, which owns one direct stroke of its own plus the nested
-// 大), that outer group's own stroke was wrongly absorbed into the nested
-// target's block instead of staying separate. See 窺 (07aba.svg): kvg:g6
-// (夫, not a KRAD target for 窺) directly owns stroke s6, and wraps kvg:g7
-// (大, a KRAD target) containing only s7/s8/s9 — the 大 block must be
-// exactly those three, never four.
+// KRAD block-assignment behavior: when a KanjiVG group is labeled but has NO
+// entry of its own in a kanji's KRAD target list (e.g. 夫 in 窺/規, where
+// KRADFILE only records 大/宀/穴/見 or 大/見 as targets — not 夫), that
+// group's own direct stroke has no "correct" block of its own to join.
+// It's attached to the nearest KRAD target actually found while descending
+// through that untracked wrapper (here: the nested 大), rather than
+// bubbling further up to an unrelated sibling target several strokes away.
+// Confirmed against real kanji: for 規 (夫+見), attaching 夫's lone stroke to
+// 見 (the next sibling target at the outer level) instead of 大 (the target
+// immediately nested inside 夫 itself) reads as visibly wrong — the two
+// belong nowhere near each other on the character. See 07aba.svg (窺) for
+// the fixture this test uses.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -46,7 +50,7 @@ async function withDom(run) {
   }
 }
 
-test("KRAD: a target nested inside a non-target group doesn't absorb that group's own stroke", async () => {
+test("KRAD: an untracked wrapper's own stroke joins the nested target found while descending through it", async () => {
   await withDom(({ createKanjiAnimation, document }) => {
     const container = document.createElement("div");
     const blocksByElement = new Map();
@@ -62,12 +66,15 @@ test("KRAD: a target nested inside a non-target group doesn't absorb that group'
       p.dispatchEvent(new window.Event("click", { bubbles: true }));
     }
 
+    // 窺's kvg:g6 (夫, no entry in 窺's KRAD target list) directly owns
+    // stroke s6 and wraps kvg:g7 (大, a real target, s7/s8/s9) — s6 must
+    // join 大's block, not bubble further up to 穴/見/宀.
     const daiBlock = blocksByElement.get("大");
     assert.ok(daiBlock, "expected a 大 block to be found");
     assert.deepEqual(
       daiBlock.pathIds,
-      ["kvg:07aba-s7", "kvg:07aba-s8", "kvg:07aba-s9"],
-      "大's block must be exactly its own three strokes, not 夫's s6 too"
+      ["kvg:07aba-s6", "kvg:07aba-s7", "kvg:07aba-s8", "kvg:07aba-s9"],
+      "大's block must include 夫's own untracked stroke (s6) alongside its own three"
     );
   });
 });
