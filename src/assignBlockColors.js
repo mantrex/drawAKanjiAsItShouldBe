@@ -662,8 +662,13 @@ function assignBlockColorsKrad(rootCharGroupEl, colors) {
         // before this target, not yet claimed by an earlier target sibling)
         // join this target's block too — same "leading run merges into the
         // next block found" rule as SUBMAX, but scoped to this level only.
+        // If any of that loose came from an untracked wrapper's OWN stroke
+        // (see looseOwnerLabel below) rather than a plain sibling run, the
+        // merged block is relabeled after the fact — see labelOverride.
         const claimed = [...loose, ...ownPathEls];
+        const inheritedLabel = looseOwnerLabel;
         loose = [];
+        looseOwnerLabel = null;
         // Recurse into the target's own children for further nested
         // targets BEFORE deciding whether this target itself gets a block
         // — a target with no direct <path>s of its own (e.g. 髟 in 鬘,
@@ -679,7 +684,18 @@ function assignBlockColorsKrad(rootCharGroupEl, colors) {
         // variant-tagged form of the name kradData.json recorded.
         const rawName = child.getAttribute("kvg:element");
         const original = child.getAttribute("kvg:original");
-        const label = rawName && targetSet.has(rawName) ? rawName : original;
+        // inheritedLabel: when this block also absorbed an untracked
+        // wrapper's own stroke (e.g. 規's 夫, which owns stroke s1 and wraps
+        // the KRAD target 大), the merged block is visually and structurally
+        // that wrapper, not the narrower nested target — KanjiVG itself
+        // tags the <g> containing all of those strokes together as 夫, not
+        // 大, so the block's name should say so rather than naming the
+        // narrower nested target that just happens to be the one KRADFILE
+        // tracks. Only the untracked wrapper immediately enclosing this
+        // target can set this (see looseOwnerLabel's own comment) — a
+        // sibling run's loose strokes never carry a label, so a target with
+        // ordinary leading-run strokes keeps its own name as before.
+        const label = inheritedLabel || (rawName && targetSet.has(rawName) ? rawName : original);
         newBlock(finalPathEls, label || null, child.getAttribute("kvg:radical") || null);
       } else if (isBlockGroup(child)) {
         // Labeled but not a target: transparent — descend for nested
@@ -697,6 +713,18 @@ function assignBlockColorsKrad(rootCharGroupEl, colors) {
         // stroke with the nested 大 block, not merged into the unrelated 見
         // block found next at this level). Anything still unclaimed after
         // descending bubbles up to THIS level as usual.
+        //
+        // If child owns at least one direct <path> of its own, record its
+        // name in looseOwnerLabel BEFORE descending — not after walk(child)
+        // returns, which would be too late: a nested target inside child
+        // (e.g. 大 inside 夫) is discovered and finalized DURING walk(child)
+        // itself, not after it returns, so the label needs to already be
+        // set by the time that inner target claims this stroke. See
+        // looseOwnerLabel's own comment for why this is a single variable,
+        // not per-call state.
+        if ([...child.children].some((c) => c.tagName.toLowerCase() === "path")) {
+          looseOwnerLabel = child.getAttribute("kvg:element") || looseOwnerLabel;
+        }
         loose.push(...walk(child));
       } else {
         // Purely structural wrapper: same, transparent.
@@ -706,6 +734,19 @@ function assignBlockColorsKrad(rootCharGroupEl, colors) {
 
     return loose;
   }
+
+  // Set by walk() when a not-a-target-but-labeled wrapper (e.g. 夫) is
+  // found to directly own at least one of the strokes currently sitting in
+  // `loose` — see the isBlockGroup-but-not-target branch above. Read (and
+  // reset) by the isTarget branch when that loose run is finally claimed,
+  // so the resulting block can be labeled by the wrapper instead of by the
+  // narrower target that happened to claim it. Deliberately a single
+  // variable, not per-call state: only ONE untracked wrapper can meaningfully
+  // "own" a given loose run in the structures observed so far (an untracked
+  // wrapper directly nested inside another untracked wrapper, each with
+  // their own stroke, has not been seen in the corpus), so there is nothing
+  // to stack.
+  let looseOwnerLabel = null;
 
   const rootLoose = walk(rootCharGroupEl);
   if (rootLoose.length) {

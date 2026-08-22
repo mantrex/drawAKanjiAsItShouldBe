@@ -4,12 +4,20 @@
 // group's own direct stroke has no "correct" block of its own to join.
 // It's attached to the nearest KRAD target actually found while descending
 // through that untracked wrapper (here: the nested 大), rather than
-// bubbling further up to an unrelated sibling target several strokes away.
-// Confirmed against real kanji: for 規 (夫+見), attaching 夫's lone stroke to
+// bubbling further up to an unrelated sibling target several strokes away —
+// confirmed against real kanji: for 規 (夫+見), attaching 夫's lone stroke to
 // 見 (the next sibling target at the outer level) instead of 大 (the target
-// immediately nested inside 夫 itself) reads as visibly wrong — the two
-// belong nowhere near each other on the character. See 07aba.svg (窺) for
-// the fixture this test uses.
+// immediately nested inside 夫 itself) reads as visibly wrong, the two
+// belong nowhere near each other on the character.
+//
+// The resulting merged block is labeled by the UNTRACKED WRAPPER (夫), not
+// by the narrower target that happened to claim the strokes (大): KanjiVG
+// itself tags the <g> containing all four strokes together as 夫 — that
+// block visually and structurally IS 夫, and naming it "大" would be
+// misleading (大 alone is only 3 of those 4 strokes; DAKAISB-TALES's "story
+// of 大" for that merged block would be describing a component narrower
+// than what's actually shown/clickable). See 07aba.svg (窺) for the fixture
+// this test uses.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -50,7 +58,7 @@ async function withDom(run) {
   }
 }
 
-test("KRAD: an untracked wrapper's own stroke joins the nested target found while descending through it", async () => {
+test("KRAD: an untracked wrapper's own stroke joins its nested target's block, labeled as the wrapper", async () => {
   await withDom(({ createKanjiAnimation, document }) => {
     const container = document.createElement("div");
     const blocksByElement = new Map();
@@ -67,14 +75,16 @@ test("KRAD: an untracked wrapper's own stroke joins the nested target found whil
     }
 
     // 窺's kvg:g6 (夫, no entry in 窺's KRAD target list) directly owns
-    // stroke s6 and wraps kvg:g7 (大, a real target, s7/s8/s9) — s6 must
-    // join 大's block, not bubble further up to 穴/見/宀.
-    const daiBlock = blocksByElement.get("大");
-    assert.ok(daiBlock, "expected a 大 block to be found");
+    // stroke s6 and wraps kvg:g7 (大, a real target, s7/s8/s9). The merged
+    // block must contain all four strokes AND be labeled "夫" — the wrapper
+    // KanjiVG itself tags as containing them all, not the narrower "大".
+    assert.equal(blocksByElement.has("大"), false, "merged block must be labeled 夫, not 大");
+    const fuBlock = blocksByElement.get("夫");
+    assert.ok(fuBlock, "expected a 夫 block to be found");
     assert.deepEqual(
-      daiBlock.pathIds,
+      fuBlock.pathIds,
       ["kvg:07aba-s6", "kvg:07aba-s7", "kvg:07aba-s8", "kvg:07aba-s9"],
-      "大's block must include 夫's own untracked stroke (s6) alongside its own three"
+      "夫's block must include its own stroke (s6) plus 大's own three"
     );
   });
 });
