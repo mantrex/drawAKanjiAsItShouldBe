@@ -683,9 +683,19 @@ function assignBlockColorsKrad(rootCharGroupEl, colors) {
         newBlock(finalPathEls, label || null, child.getAttribute("kvg:radical") || null);
       } else if (isBlockGroup(child)) {
         // Labeled but not a target: transparent — descend for nested
-        // targets. Anything loose inside bubbles up to THIS level (not
-        // resolved here, since this <g> isn't a target itself).
-        loose.push(...walk(child));
+        // targets, but child's OWN direct <path>s (skipDirectPaths=true)
+        // must not enter that recursive call's loose accumulator, or a
+        // target found deeper in the same call wrongly absorbs them via the
+        // `claimed = [...loose, ...ownPathEls]` line above. E.g. 窺's 夫 (not
+        // a KRAD target) directly owns one stroke AND wraps a nested target
+        // 大 (which is one) — that stroke belongs to 夫, not to 大, so a
+        // nested target must only ever claim ITS OWN direct paths and
+        // further-nested targets, never strokes belonging to this
+        // (non-target) wrapper itself. child's own direct paths are instead
+        // collected separately here and appended to `loose` for THIS level
+        // afterwards, same as if child had never been entered.
+        const ownDirectPathEls = [...child.children].filter((c) => c.tagName.toLowerCase() === "path");
+        loose.push(...walk(child, true), ...ownDirectPathEls);
       } else {
         // Purely structural wrapper: same, transparent.
         loose.push(...walk(child));
