@@ -685,16 +685,20 @@ function assignBlockColorsKrad(rootCharGroupEl, colors) {
         const rawName = child.getAttribute("kvg:element");
         const original = child.getAttribute("kvg:original");
         // inheritedLabel: when this block also absorbed an untracked
-        // wrapper's own stroke (e.g. 規's 夫, which owns stroke s1 and wraps
-        // the KRAD target 大), the merged block is visually and structurally
-        // that wrapper, not the narrower nested target — KanjiVG itself
-        // tags the <g> containing all of those strokes together as 夫, not
-        // 大, so the block's name should say so rather than naming the
-        // narrower nested target that just happens to be the one KRADFILE
-        // tracks. Only the untracked wrapper immediately enclosing this
-        // target can set this (see looseOwnerLabel's own comment) — a
-        // sibling run's loose strokes never carry a label, so a target with
-        // ordinary leading-run strokes keeps its own name as before.
+        // wrapper's own stroke found while descending INTO that wrapper
+        // (e.g. 規's 夫, which owns stroke s1 and directly contains the KRAD
+        // target 大 as its own child), the merged block is visually and
+        // structurally that wrapper, not the narrower nested target —
+        // KanjiVG itself tags the <g> containing all of those strokes
+        // together as 夫, not 大, so the block's name should say so rather
+        // than naming the narrower nested target that just happens to be
+        // the one KRADFILE tracks. inheritedLabel is only ever non-null here
+        // when this target was found DURING the recursive walk(child) call
+        // that a wrapper's own owned-label set immediately before descending
+        // (see the isBlockGroup branch below) — never when this target is
+        // merely a later SIBLING of that wrapper at the same level (looseOwnerLabel
+        // is explicitly cleared before returning from that recursive call in
+        // that case, precisely so it cannot leak to a sibling — see below).
         const label = inheritedLabel || (rawName && targetSet.has(rawName) ? rawName : original);
         newBlock(finalPathEls, label || null, child.getAttribute("kvg:radical") || null);
       } else if (isBlockGroup(child)) {
@@ -714,20 +718,67 @@ function assignBlockColorsKrad(rootCharGroupEl, colors) {
         // block found next at this level). Anything still unclaimed after
         // descending bubbles up to THIS level as usual.
         //
-        // If child owns at least one direct <path> of its own, record its
-        // name in looseOwnerLabel BEFORE descending — not after walk(child)
-        // returns, which would be too late: a nested target inside child
-        // (e.g. 大 inside 夫) is discovered and finalized DURING walk(child)
-        // itself, not after it returns, so the label needs to already be
-        // set by the time that inner target claims this stroke. See
-        // looseOwnerLabel's own comment for why this is a single variable,
-        // not per-call state.
-        if ([...child.children].some((c) => c.tagName.toLowerCase() === "path")) {
+        // If child owns at least one direct <path> LEADING its own children
+        // (i.e. before its first nested <g>, such as 夫's own stroke before
+        // its nested 大 in 規/窺), record its name in looseOwnerLabel BEFORE
+        // descending — not after walk(child) returns, which would be too
+        // late: a nested target inside child (e.g. 大 inside 夫) is
+        // discovered and finalized DURING walk(child) itself, not after it
+        // returns, so the label needs to already be set by the time that
+        // inner target claims this stroke.
+        //
+        // Deliberately checked by document-order POSITION among child's own
+        // direct children, not just "child owns some direct <path>
+        // somewhere among its children": a child can also own a direct
+        // <path> AFTER its nested <g> (e.g. 丈's 乂, which contains a nested
+        // target 丿 first, then its own stroke s3 afterward) — in that
+        // ordering, 乂's own stroke cannot possibly be what a target found
+        // while descending into 乂 visually represents, since that stroke
+        // hasn't been "drawn yet" at the point 丿 is reached. Setting
+        // looseOwnerLabel in that case wrongly attached 乂's name to 丿's
+        // block (found in this session's corpus-wide audit, alongside the
+        // 畍/疥/窺 cases documented elsewhere in this function). Only a
+        // direct <path> BEFORE child's first nested <g> child counts.
+        const firstGChildIndex = [...child.children].findIndex((c) => c.tagName.toLowerCase() === "g");
+        const ownsLeadingDirectPath = [...child.children].some(
+          (c, i) => c.tagName.toLowerCase() === "path" && (firstGChildIndex === -1 || i < firstGChildIndex)
+        );
+        if (ownsLeadingDirectPath) {
           looseOwnerLabel = child.getAttribute("kvg:element") || looseOwnerLabel;
         }
         loose.push(...walk(child));
+        // If child set looseOwnerLabel for its OWN stroke just above, and
+        // nothing found while descending through child's own subtree
+        // consumed it (looseOwnerLabel is still exactly what child itself
+        // set), it must NOT survive past child's own subtree: it would
+        // otherwise leak to a later SIBLING target — one that is not
+        // structurally contained by child at all, just found later at the
+        // same level or deeper inside a DIFFERENT sibling — and wrongly
+        // relabel that unrelated target's block as child's own name. Two
+        // real corpus cases demonstrate why this must be scoped strictly to
+        // child's own subtree, not the wider level: 畍/疥 (人 owns strokes,
+        // followed by an unnamed sibling wrapper containing the unrelated
+        // target 丿 one level deeper — 丿's block was wrongly labeled "人")
+        // and 窺/規 itself (冖 owns strokes, followed by sibling target 八,
+        // itself a genuine KRAD target with its own name — 八's block was
+        // wrongly labeled "冖", silently hiding a real target's own name).
+        // Only a target found DURING walk(child) — i.e. actually nested
+        // inside child, like 大 inside 夫 — may inherit child's label; see
+        // the isTarget branch above, which reads (and clears) looseOwnerLabel
+        // itself the moment such a nested target is found, before control
+        // ever returns here.
+        if (ownsLeadingDirectPath && looseOwnerLabel === (child.getAttribute("kvg:element") || null)) {
+          looseOwnerLabel = null;
+        }
       } else {
-        // Purely structural wrapper: same, transparent.
+        // Purely structural wrapper (no kvg:element/kvg:radical of its
+        // own): transparent, same as above. It can never itself be the
+        // thing looseOwnerLabel names, so if a preceding sibling already
+        // set looseOwnerLabel for its own stroke, descending into this
+        // unrelated wrapper to search for a target must not let that label
+        // leak into whatever's found here either — same reasoning and same
+        // 畍/疥 evidence as the isBlockGroup branch above.
+        looseOwnerLabel = null;
         loose.push(...walk(child));
       }
     }
