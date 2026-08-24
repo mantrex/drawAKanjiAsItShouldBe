@@ -1,6 +1,6 @@
 {
   "name": "dakaisb",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Draw A Kanji As It Should Be — dependency-free stroke-order animation for KanjiVG-format SVGs, with per-block coloring.",
   "type": "module",
   "main": "src/index.js",
