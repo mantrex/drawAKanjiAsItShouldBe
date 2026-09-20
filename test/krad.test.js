@@ -65,7 +65,7 @@ test("KRAD: an untracked wrapper's own stroke joins its nested target's block, l
     const blocksByElement = new Map();
 
     createKanjiAnimation(svgText, container, {
-      colorCriteria: "KRAD",
+      colorCriteria: "KVG-KRAD",
       onPartClick(detail) {
         blocksByElement.set(detail.element, detail);
       },
@@ -119,7 +119,7 @@ test("KRAD: an untracked wrapper's own TRAILING stroke (after its nested target)
     const blocksByElement = new Map();
 
     createKanjiAnimation(zhangSvgText, container, {
-      colorCriteria: "KRAD",
+      colorCriteria: "KVG-KRAD",
       onPartClick(detail) {
         blocksByElement.set(detail.element, detail);
       },

@@ -1,11 +1,12 @@
 // assignBlockColors.js
 //
-// KRADFILE component data (kradData.json) used by "KRAD" below is derived
+// KRADFILE component data (kradData.json) used by "KVG-KRAD" below is derived
 // from KRADFILE, Copyright 2001/2007 Michael Raine, James Breen and the
 // Electronic Dictionary Research & Development Group (EDRDG), licensed
 // under CC BY-SA 4.0 (https://www.edrdg.org/edrdg/licence.html). See
 // https://www.edrdg.org/wiki/index.php/KANJIDIC_Project.
 import kradData from "./kradData.json" with { type: "json" };
+import kradExtendedData from "./kradExtendedData.json" with { type: "json" };
 //
 // Walks the KanjiVG root character group and assigns one color per "block",
 // in document order. Which <g> elements count as a block depends on
@@ -64,14 +65,17 @@ import kradData from "./kradData.json" with { type: "json" };
 //   and, past a handful of blocks, making adjacent palette colors hard to
 //   tell apart.
 //
-// - "KRAD": uses KRADFILE (an independent, EDRDG-maintained kanji-component
+// - "KVG-KRAD": KRADFILE-driven, then adapted to KanjiVG. The colouring model
+//   started from KRADFILE (an independent, EDRDG-maintained kanji-component
 //   dataset — see the file header above) as an external source of which
 //   named sub-components are teaching-relevant for a given kanji, instead
-//   of relying on KanjiVG's own tagging depth the way SUB1/SUB2/SUBMAX do.
+//   of relying on KanjiVG's own tagging depth the way SUB1/SUB2/SUBMAX do,
+//   and was then reworked to absorb the anomalies between the two systems
+//   (see the second half of this entry).
 //   For a kanji present in kradData.json, every labeled <g> whose
 //   kvg:element (or kvg:original) is in that kanji's KRAD component set
 //   becomes its own block, using only that group's OWN direct <path>
-//   children — unlike SUB1/SUB2/SUBMAX, a KRAD target does NOT stop the
+//   children — unlike SUB1/SUB2/SUBMAX, a target does NOT stop the
 //   walk: a target nested inside another target (e.g. 土 inside 至, both in
 //   屋's KRAD component set) still becomes its own separate block, since
 //   KRADFILE's flat component list treats them as peer components, not one
@@ -87,8 +91,19 @@ import kradData from "./kradData.json" with { type: "json" };
 //   turned out, per the mapping this data was built from, to have no
 //   KanjiVG counterpart in the general case — falls back to SUBMAX for that
 //   kanji.
+//   Adaptation for KanjiVG/KRADFILE anomalies: KRADFILE names atomic
+//   components (一, 丨, 丿, 二, 十, 土, ...) that KanjiVG leaves as raw
+//   ungrouped strokes, so the walk above would fold those strokes into an
+//   unrelated neighbouring block (in 右 the diagonal and the horizontal bar
+//   would end up inside 口's block). src/kradExtendedData.json, generated
+//   offline by tools/build-krad-extended.mjs, lists for each affected kanji
+//   the stroke groups that carry such a component; they are carved out of
+//   the block that absorbed them into a block of their own, named after the
+//   component. The generator only records unambiguous matches (stroke-type
+//   signature learned from KanjiVG's own tagged instances of that
+//   component), so an unresolved case keeps the plain KRAD behaviour.
 //
-// - "CHISE_MAIN": like KRAD, uses an external kanji-component source instead
+// - "CHISE_MAIN": like KVG-KRAD, uses an external kanji-component source instead
 //   of KanjiVG's own tagging depth — here, CHISE (Character Information
 //   Service Environment, chise.org), via its IDS (Ideographic Description
 //   Sequence) data. UNLIKE KRAD, this data is NEVER bundled with DAKAISB:
@@ -148,8 +163,8 @@ export function assignBlockColors(rootCharGroupEl, colors, colorCriteria = "MAIN
   if (colorCriteria === "SUBMAX") {
     return assignBlockColorsSubMax(rootCharGroupEl, colors);
   }
-  if (colorCriteria === "KRAD") {
-    return assignBlockColorsKrad(rootCharGroupEl, colors);
+  if (colorCriteria === "KVG-KRAD") {
+    return assignBlockColorsKvgKrad(rootCharGroupEl, colors);
   }
   if (colorCriteria === "CHISE_MAIN") {
     return assignBlockColorsChiseMain(rootCharGroupEl, colors, chiseData);
@@ -584,6 +599,52 @@ function assignBlockColorsSubMax(rootCharGroupEl, colors) {
   return { pathToColor, blocks };
 }
 
+
+// Applies src/kradExtendedData.json on top of the plain KRAD walk: each
+// listed stroke group is moved out of whichever block absorbed it into a
+// new block named after the component it carries.
+function assignBlockColorsKvgKrad(rootCharGroupEl, colors) {
+  const base = assignBlockColorsKradBase(rootCharGroupEl, colors);
+  const rootElement = rootCharGroupEl.getAttribute("kvg:element");
+  const extra = rootElement ? kradExtendedData.kanji[rootElement] : undefined;
+  if (!extra || extra.length === 0) return base;
+
+  const paths = [...rootCharGroupEl.querySelectorAll("path")];
+  const blocks = base.blocks.map((b) => ({ ...b, pathIds: [...b.pathIds] }));
+  const blockOf = new Map();
+  blocks.forEach((b) => b.pathIds.forEach((id) => blockOf.set(id, b)));
+
+  for (const { name, strokes } of extra) {
+    const ids = strokes.map((n) => paths[n - 1]?.getAttribute("id"));
+    if (ids.some((id) => !id || !blockOf.has(id))) continue;
+    const sources = new Set(ids.map((id) => blockOf.get(id)));
+    const wouldEmpty = [...sources].some((b) => b.pathIds.every((id) => ids.includes(id)));
+    if (wouldEmpty) continue;
+    for (const id of ids) {
+      const src = blockOf.get(id);
+      src.pathIds = src.pathIds.filter((x) => x !== id);
+    }
+    const created = { index: 0, color: "", pathIds: ids, element: name, radical: null };
+    blocks.push(created);
+    ids.forEach((id) => blockOf.set(id, created));
+  }
+
+  const order = new Map(paths.map((p, i) => [p.getAttribute("id"), i]));
+  const byId = new Map(paths.map((p) => [p.getAttribute("id"), p]));
+  for (const b of blocks) b.pathIds.sort((a, c) => order.get(a) - order.get(c));
+  blocks.sort((a, b) => order.get(a.pathIds[0]) - order.get(b.pathIds[0]));
+  const pathToColor = new Map();
+  blocks.forEach((b, i) => {
+    b.index = i;
+    b.color = colors[i % colors.length];
+    for (const id of b.pathIds) pathToColor.set(byId.get(id), b.color);
+  });
+  return { pathToColor, blocks };
+}
+
+export function assignBlockColorsKradBase(rootCharGroupEl, colors) {
+  return assignBlockColorsKrad(rootCharGroupEl, colors);
+}
 
 function assignBlockColorsKrad(rootCharGroupEl, colors) {
   const rootElement = rootCharGroupEl.getAttribute("kvg:element");

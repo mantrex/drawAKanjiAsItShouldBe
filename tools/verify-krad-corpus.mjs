@@ -1,6 +1,6 @@
 // verify-krad-corpus.mjs
 //
-// Corpus-wide sanity check specifically for colorCriteria: "KRAD", run after
+// Corpus-wide sanity check specifically for colorCriteria: "KVG-KRAD", run after
 // the krad-anomaly-corrections pass (see docsNoGit/krad-anomaly-corrections.md)
 // to confirm the corrections to src/kradData.json did not break anything: for
 // every KanjiVG file, every path must end up in exactly one block (no stroke
@@ -25,7 +25,7 @@ const { parseKanjiVg } = await import(join(PROJECT_ROOT, "src/parseKanjiVg.js"))
 const { assignBlockColors } = await import(join(PROJECT_ROOT, "src/assignBlockColors.js"));
 
 const colors = ["#f00", "#0f0", "#00f", "#ff0", "#0ff", "#f0f", "#888"];
-const CRITERIA = ["MAIN", "SUB1", "SUB2", "SUBMAX", "KRAD"];
+const CRITERIA = ["MAIN", "SUB1", "SUB2", "SUBMAX", "KVG-KRAD"];
 
 const files = readdirSync(CORPUS_DIR).filter((f) => f.endsWith(".svg"));
 console.log(`Verifying ${files.length} KanjiVG files across ${CRITERIA.length} criteria...`);

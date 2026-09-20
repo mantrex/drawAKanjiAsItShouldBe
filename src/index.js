@@ -326,7 +326,7 @@ export async function createKanjiAnimationFromText(text, containerEl, overrides 
  * project's own corpus analysis rather than general claims).
  *
  * @param {object} [options]
- * @param {string} [options.criteria] - one of "MAIN"/"SUB1"/"SUB2"/"SUBMAX"/"KRAD"/"CHISE_MAIN"/"CHISE_SUBMAX" (default "MAIN")
+ * @param {string} [options.criteria] - one of "MAIN"/"SUB1"/"SUB2"/"SUBMAX"/"KVG-KRAD"/"CHISE_MAIN"/"CHISE_SUBMAX" (default "MAIN")
  * @param {boolean} [options.details] - include the extra structured metadata block (default false)
  * @returns {{ criteria: string, summary: string, details?: object }}
  */
