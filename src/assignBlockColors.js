@@ -91,17 +91,21 @@ import kradExtendedData from "./kradExtendedData.json" with { type: "json" };
 //   turned out, per the mapping this data was built from, to have no
 //   KanjiVG counterpart in the general case — falls back to SUBMAX for that
 //   kanji.
-//   Adaptation for KanjiVG/KRADFILE anomalies: KRADFILE names atomic
-//   components (一, 丨, 丿, 二, 十, 土, ...) that KanjiVG leaves as raw
-//   ungrouped strokes, so the walk above would fold those strokes into an
-//   unrelated neighbouring block (in 右 the diagonal and the horizontal bar
-//   would end up inside 口's block). src/kradExtendedData.json, generated
-//   offline by tools/build-krad-extended.mjs, lists for each affected kanji
-//   the stroke groups that carry such a component; they are carved out of
-//   the block that absorbed them into a block of their own, named after the
-//   component. The generator only records unambiguous matches (stroke-type
-//   signature learned from KanjiVG's own tagged instances of that
-//   component), so an unresolved case keeps the plain KRAD behaviour.
+//   Adaptation for KanjiVG/KRADFILE anomalies: KRADFILE and KanjiVG do not
+//   segment kanji the same way, so the walk above can fold strokes into a
+//   block they do not belong to (in 右 the strokes of 𠂇 "the hand" would end
+//   up inside 口's block). src/kradExtendedData.json, generated offline by
+//   tools/build-krad-extended.mjs, lists per affected kanji the stroke groups
+//   to carve out of the block that absorbed them into a block of their own.
+//   In priority order a group is (A) the outermost KanjiVG group made only of
+//   such strokes — named by KanjiVG's tag when its stroke count is the
+//   component's full count, anonymous otherwise; (B) the one component CHISE/
+//   IDS says is missing from KanjiVG's tree (𠂇 in 右), when the run has that
+//   component's usual stroke count; (C) KRADFILE's multi-stroke atomic
+//   components (二, 十, 八, ...), only when they explain ALL the leftover of
+//   that block. Every added block has at least two strokes — a lone generic
+//   stroke is not a component a learner can name — and anything unresolved
+//   keeps the plain KRAD behaviour, so no label is ever invented.
 //
 // - "CHISE_MAIN": like KVG-KRAD, uses an external kanji-component source instead
 //   of KanjiVG's own tagging depth — here, CHISE (Character Information
@@ -618,7 +622,8 @@ function assignBlockColorsKvgKrad(rootCharGroupEl, colors) {
     const ids = strokes.map((n) => paths[n - 1]?.getAttribute("id"));
     if (ids.some((id) => !id || !blockOf.has(id))) continue;
     const sources = new Set(ids.map((id) => blockOf.get(id)));
-    const wouldEmpty = [...sources].some((b) => b.pathIds.every((id) => ids.includes(id)));
+    // An anonymous block may be replaced entirely; a named one may not vanish.
+    const wouldEmpty = [...sources].some((b) => b.element && b.pathIds.every((id) => ids.includes(id)));
     if (wouldEmpty) continue;
     for (const id of ids) {
       const src = blockOf.get(id);
@@ -630,6 +635,7 @@ function assignBlockColorsKvgKrad(rootCharGroupEl, colors) {
   }
 
   const order = new Map(paths.map((p, i) => [p.getAttribute("id"), i]));
+  for (let i = blocks.length - 1; i >= 0; i--) if (blocks[i].pathIds.length === 0) blocks.splice(i, 1);
   const byId = new Map(paths.map((p) => [p.getAttribute("id"), p]));
   for (const b of blocks) b.pathIds.sort((a, c) => order.get(a) - order.get(c));
   blocks.sort((a, b) => order.get(a.pathIds[0]) - order.get(b.pathIds[0]));

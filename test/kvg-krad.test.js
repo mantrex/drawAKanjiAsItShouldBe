@@ -1,6 +1,7 @@
 // KVG-KRAD: KRADFILE names atomic components (丿, 一) that KanjiVG leaves as
 // ungrouped strokes in 右. Plain KRAD folded both into 口's block; KVG-KRAD
-// carves them out into blocks of their own, named after the component.
+// carves them out into one block named after the component CHISE/IDS says
+// they form (𠂇, "the hand") rather than two atoms.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -23,8 +24,8 @@ test("KVG-KRAD names the untagged strokes of 右 instead of folding them into �
   assert.equal(base.blocks.length, 1, "plain KRAD absorbs everything into 口");
 
   const { blocks, pathToColor } = assignBlockColors(rootCharGroupEl, colors, "KVG-KRAD");
-  assert.deepEqual(blocks.map((b) => b.element), ["丿", "一", "口"]);
-  assert.deepEqual(blocks.map((b) => b.pathIds.length), [1, 1, 3]);
+  assert.deepEqual(blocks.map((b) => b.element), ["𠂇", "口"]);
+  assert.deepEqual(blocks.map((b) => b.pathIds.length), [2, 3]);
   assert.equal(pathToColor.size, 5, "every stroke is coloured exactly once");
-  assert.equal(new Set(blocks.map((b) => b.color)).size, 3, "three distinct colours");
+  assert.equal(new Set(blocks.map((b) => b.color)).size, 2, "two distinct colours");
 });
