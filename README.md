@@ -108,6 +108,15 @@ Unset/`null` (the default) attaches no click listeners at all — zero behavior 
 
 `createKanjiAnimationFromText` passes `onPartClick` straight through to every kanji in the sequence — the callback fires the same way per-character, per-block, whichever kanji in the text was clicked.
 
+### `blocks`
+
+The same blocks are also available without a click: every instance returned by `createKanjiAnimation` has a `blocks` array, one entry per block in document order, each `{ index, element, radical, color, pathIds }` exactly as `onPartClick` receives it (a copy — changing it does not affect the drawing). `createKanjiAnimationFromText` returns `{ instances, … }`, so the blocks of the first kanji are `result.instances[0].blocks`. Useful for listing a kanji's components exactly as the animation colors them, for whichever `colorCriteria` is active.
+
+```js
+const anim = createKanjiAnimation(svgText, containerEl, { colorCriteria: 'KVG-KRAD' })
+anim.blocks // [{ index: 0, element: '扌', radical: null, color: '#…', pathIds: [...] }, …]
+```
+
 ### `kanjiAnimationInfo`
 
 Returns plain-English information about a `colorCriteria` mode, useful for building UI (a criteria picker with tooltips, documentation generated at build time, etc.) without hardcoding descriptions that can drift out of sync with the library itself. The text lives in `src/criteriaInfo.json`, not inline in code, so it can be edited independently.

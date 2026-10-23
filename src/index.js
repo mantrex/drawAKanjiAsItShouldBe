@@ -131,6 +131,17 @@ export function createKanjiAnimation(svgText, containerEl, overrides = {}) {
 
   return {
     element: svgEl,
+    // The blocks `colorCriteria` produced, in the same shape `onPartClick`
+    // receives — so a caller can list the kanji's parts exactly as they are
+    // colored (e.g. a component breakdown next to the animation) without
+    // waiting for a click. A copy: changing it does not affect the drawing.
+    blocks: blocks.map((block) => ({
+      index: block.index,
+      element: block.element,
+      radical: block.radical ?? null,
+      color: block.color,
+      pathIds: [...block.pathIds],
+    })),
     // Total time (ms) the stroke animation takes from a fresh play() to
     // fully drawn — last stroke's delay (index * speed) plus its own
     // duration (speed). Used by createKanjiAnimationFromText to know when
