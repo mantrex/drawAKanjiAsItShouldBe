@@ -158,6 +158,10 @@ import kradExtendedData from "./kradExtendedData.json" with { type: "json" };
 //   interchangeable with it, since the two encode different component
 //   granularities for the same kanji.
 export function assignBlockColors(rootCharGroupEl, colors, colorCriteria = "MAIN", chiseData) {
+  return joinSplitParts(rootCharGroupEl, colors, assignBlockColorsBy(rootCharGroupEl, colors, colorCriteria, chiseData));
+}
+
+function assignBlockColorsBy(rootCharGroupEl, colors, colorCriteria, chiseData) {
   if (colorCriteria === "SUB1") {
     return assignBlockColorsSub1(rootCharGroupEl, colors);
   }
@@ -177,6 +181,59 @@ export function assignBlockColors(rootCharGroupEl, colors, colorCriteria = "MAIN
     return assignBlockColorsChiseSubmax(rootCharGroupEl, colors, chiseData);
   }
   return assignBlockColorsMain(rootCharGroupEl, colors);
+}
+
+// KanjiVG splits a component that another one interrupts into parts, each
+// its own <g> with kvg:part="1", "2"… — 園's 囗 is strokes 1–2 (part 1) and
+// stroke 13 (part 2), with 袁 written in between. Every colorCriteria sees
+// the parts as separate groups, so the closing stroke of 囗 got the next
+// palette color instead of 囗's own. Here, whatever the criterion: blocks
+// that are EXACTLY the parts of one split component (the same kvg:element,
+// and the same kvg:number when KanjiVG numbers repeated components) become
+// one block, labeled by its first part, and the blocks are recolored in
+// reading order. A block that is only a piece of a part, or a part plus
+// other strokes, is left as it is — the criterion's granularity stays.
+function joinSplitParts(rootCharGroupEl, colors, result) {
+  const allPaths = [...rootCharGroupEl.querySelectorAll("path")];
+  const strokesOf = (g) => [...g.querySelectorAll("path")].map((p) => p.getAttribute("id"));
+  const signature = (ids) => [...ids].sort().join(" ");
+
+  // signature of each part's strokes -> the split component it belongs to
+  const componentOfPart = new Map();
+  for (const g of rootCharGroupEl.querySelectorAll("g")) {
+    if (!g.getAttribute("kvg:part")) continue;
+    const key = `${g.getAttribute("kvg:element") || ""}|${g.getAttribute("kvg:number") || ""}`;
+    const ids = strokesOf(g);
+    if (ids.length) componentOfPart.set(signature(ids), key);
+  }
+  if (componentOfPart.size === 0) return result;
+
+  const firstBlockOf = new Map(); // component key -> the block the other parts join
+  const kept = [];
+  let joined = false;
+  for (const block of result.blocks) {
+    const key = componentOfPart.get(signature(block.pathIds));
+    const first = key && firstBlockOf.get(key);
+    if (first) {
+      first.pathIds.push(...block.pathIds);
+      joined = true;
+      continue;
+    }
+    if (key) firstBlockOf.set(key, block);
+    kept.push(block);
+  }
+  if (!joined) return result;
+
+  const order = new Map(allPaths.map((p, i) => [p.getAttribute("id"), i]));
+  const pathById = new Map(allPaths.map((p) => [p.getAttribute("id"), p]));
+  const pathToColor = new Map();
+  kept.forEach((block, i) => {
+    block.pathIds.sort((a, b) => order.get(a) - order.get(b));
+    block.index = i;
+    block.color = colors[i % colors.length];
+    for (const id of block.pathIds) pathToColor.set(pathById.get(id), block.color);
+  });
+  return { pathToColor, blocks: kept };
 }
 
 function assignBlockColorsMain(rootCharGroupEl, colors) {

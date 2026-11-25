@@ -117,6 +117,10 @@ const anim = createKanjiAnimation(svgText, containerEl, { colorCriteria: 'KVG-KR
 anim.blocks // [{ index: 0, element: '扌', radical: null, color: '#…', pathIds: [...] }, …]
 ```
 
+### Split components
+
+KanjiVG splits a component that another one interrupts into parts (`kvg:part="1"`, `"2"`…): 園's 囗 is strokes 1–2 and stroke 13, with 袁 written in between. Whatever the `colorCriteria`, blocks that are exactly the parts of one split component are joined into one block, one color, labeled by its first part — so the closing stroke of 囗 (or 匚 in 匠, 二 in 五…) has the color of the rest of the component, not the next one in the palette. A block that is only a piece of a part, or a part plus other strokes, is left as the criterion made it.
+
 ### `kanjiAnimationInfo`
 
 Returns plain-English information about a `colorCriteria` mode, useful for building UI (a criteria picker with tooltips, documentation generated at build time, etc.) without hardcoding descriptions that can drift out of sync with the library itself. The text lives in `src/criteriaInfo.json`, not inline in code, so it can be edited independently.
